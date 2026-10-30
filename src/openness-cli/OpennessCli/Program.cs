@@ -567,6 +567,17 @@ internal static class Program
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
 
+        if (options.ProbeEditTypeName is { } editType)
+        {
+            foreach (var line in gateway.ProbeEditLibraryType(editType, options.ExportVersion, options.ProbeItemName))
+            {
+                Console.WriteLine(line);
+            }
+
+            // A probe reports; it does not pass or fail.
+            return ExitCodes.Success;
+        }
+
         if (options.ProbeDocumentsTypeName is { } probeType && options.OutDirectory is { } probeOut)
         {
             foreach (var line in gateway.ProbeExportAsDocuments(probeType, probeOut))

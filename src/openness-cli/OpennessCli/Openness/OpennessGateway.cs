@@ -2395,6 +2395,307 @@ public sealed class OpennessGateway : IOpennessGateway
         return report;
     }
 
+    /// <summary>
+    /// Asks a library type version whether it can be opened for editing, and whether the content
+    /// of either the released or the in-work version can be walked down to an item's event
+    /// handlers.
+    /// </summary>
+    /// <remarks>
+    /// The faceplate-script question (2026-10-30, a live run): a defect sits in a library
+    /// faceplate's button script, and no command could reach it. The surveys recorded "faceplate
+    /// types are not walked" — a statement about this tool, never a measurement of the API. This
+    /// probe makes the measurement: every member the version offers, any Edit() and what it
+    /// returns, a bounded walk of whatever object graph hangs off both versions, and the scripts of
+    /// any item named <paramref name="itemName"/>. A throw is a RESULT and is reported, not raised.
+    /// An in-work version it created is discarded again where the API offers a way; the report
+    /// says whether that happened, because a probe that leaves an edit open must not look clean.
+    /// </remarks>
+    public IReadOnlyList<string> ProbeEditLibraryType(string typeName, string? version, string? itemName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ProbeEditLibraryType)}.");
+        }
+
+        var library = TryReadObject(() => _project.GetType().GetProperty("ProjectLibrary")?.GetValue(_project))
+            ?? throw new InvalidOperationException("Project has no ProjectLibrary.");
+        var typeFolder = TryReadObject(() => library.GetType().GetProperty("TypeFolder")?.GetValue(library))
+            ?? throw new InvalidOperationException("Project library has no TypeFolder.");
+        var liveType = FindLibraryTypeObject(typeFolder, typeName)
+            ?? throw new InvalidOperationException($"No library type named '{typeName}'.");
+
+        var report = new List<string> { $"type: {typeName}  [{liveType.GetType().FullName}]" };
+        report.AddRange(DescribeMembers("type", liveType));
+
+        object? chosen = null;
+        if (TryReadObject(() => liveType.GetType().GetProperty("Versions")?.GetValue(liveType)) is System.Collections.IEnumerable versions)
+        {
+            foreach (var candidate in versions)
+            {
+                if (candidate is null)
+                {
+                    continue;
+                }
+
+                var label = TryReadObject(() => candidate.GetType().GetProperty("VersionNumber")?.GetValue(candidate))?.ToString() ?? string.Empty;
+                var isDefault = TryReadObject(() => candidate.GetType().GetProperty("IsDefault")?.GetValue(candidate)) as bool? ?? false;
+                var state = TryReadObject(() => candidate.GetType().GetProperty("State")?.GetValue(candidate))?.ToString() ?? "?";
+                report.Add($"version: {label}  state={state}  default={isDefault}");
+                if (version is null ? isDefault : label.Equals(version, StringComparison.OrdinalIgnoreCase))
+                {
+                    chosen = candidate;
+                }
+            }
+        }
+
+        if (chosen is null)
+        {
+            report.Add("NO VERSION SELECTED - nothing further probed.");
+            return report;
+        }
+
+        report.Add($"chosen version CLR type: {chosen.GetType().FullName}");
+        report.AddRange(DescribeMembers("version", chosen));
+
+        report.Add("faceplate-related CLR types in loaded Siemens.Engineering assemblies:");
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => (a.GetName().Name ?? string.Empty).StartsWith("Siemens.Engineering", StringComparison.Ordinal)))
+        {
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (System.Reflection.ReflectionTypeLoadException ex)
+            {
+                types = ex.Types.Where(t => t is not null).ToArray()!;
+            }
+
+            foreach (var t in types.Where(t => t.IsPublic && t.Name.IndexOf("Faceplate", StringComparison.OrdinalIgnoreCase) >= 0).OrderBy(t => t.FullName))
+            {
+                report.Add($"  {t.FullName}");
+            }
+        }
+
+        // The version declares its own ExportAsDocuments(DirectoryInfo, String, String, ...), distinct
+        // from the type-level one --probe-documents tries. A document export is the only content
+        // route left once the object graph offers none, so it is tried here rather than assumed.
+        var documents = chosen.GetType().GetMethods().FirstOrDefault(m => m.Name == "ExportAsDocuments" && m.GetParameters().Length == 4);
+        if (documents is null)
+        {
+            report.Add("DOCUMENTS: no four-argument ExportAsDocuments on the version.");
+        }
+        else
+        {
+            var parameters = documents.GetParameters();
+            report.Add($"DOCUMENTS: signature ExportAsDocuments({string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"))})");
+            var optionsValue = Enum.GetValues(parameters[3].ParameterType).Cast<object>().First();
+
+            // The advertised format list is empty for every HMI type, so the format argument is
+            // guessed: the names other Openness document exports use. A refusal for each is the
+            // answer, not a failure of the probe.
+            foreach (var format in new[] { string.Empty, "SimaticML", "Yaml", "YAML", "Xml", "Json", "Unified" })
+            {
+                var docDir = Path.Combine(Path.GetTempPath(), "openness-probe-docs-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(docDir);
+                try
+                {
+                    var result = documents.Invoke(chosen, new object[] { new DirectoryInfo(docDir), typeName, format, optionsValue });
+                    report.Add($"DOCUMENTS[{format}]: returned {result?.GetType().Name ?? "null"} ({TryRead(() => result?.GetType().GetProperty("State")?.GetValue(result)?.ToString()) ?? "no State"})");
+                }
+                catch (Exception ex)
+                {
+                    // Openness wraps the reason; the innermost message is the one that names it.
+                    var inner = ex;
+                    while (inner.InnerException is not null)
+                    {
+                        inner = inner.InnerException;
+                    }
+
+                    report.Add($"DOCUMENTS[{format}]: REFUSED {inner.GetType().Name}: {inner.Message.Replace("\r", " ").Replace("\n", " ").Trim()}");
+                }
+
+                foreach (var file in Directory.GetFiles(docDir, "*", SearchOption.AllDirectories))
+                {
+                    var text = File.ReadAllText(file);
+                    report.Add($"DOCUMENTS[{format}]: {file} ({text.Length} chars){(itemName is not null && text.IndexOf(itemName, StringComparison.Ordinal) >= 0 ? $" CONTAINS '{itemName}'" : string.Empty)}");
+                }
+            }
+        }
+
+        object? inWork = null;
+        var edit = chosen.GetType().GetMethods().FirstOrDefault(m => m.Name == "Edit" && m.GetParameters().Length == 0)
+            ?? liveType.GetType().GetMethods().FirstOrDefault(m => m.Name == "Edit" && m.GetParameters().Length == 0);
+        if (edit is null)
+        {
+            report.Add("EDIT: no parameterless Edit() on the version or the type.");
+        }
+        else
+        {
+            try
+            {
+                inWork = edit.Invoke(edit.DeclaringType!.IsInstanceOfType(chosen) ? chosen : liveType, null);
+                report.Add($"EDIT: {edit.DeclaringType!.Name}.Edit() returned {(inWork is null ? "null" : inWork.GetType().FullName)}");
+                if (inWork is not null)
+                {
+                    var label = TryReadObject(() => inWork.GetType().GetProperty("VersionNumber")?.GetValue(inWork))?.ToString() ?? "?";
+                    var state = TryReadObject(() => inWork.GetType().GetProperty("State")?.GetValue(inWork))?.ToString() ?? "?";
+                    report.Add($"EDIT: in-work version {label} state={state}");
+                    report.AddRange(DescribeMembers("in-work", inWork));
+                }
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                report.Add($"EDIT: REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        foreach (var (label, subject) in new[] { ("in-work", inWork), ("chosen", chosen) })
+        {
+            if (subject is null)
+            {
+                continue;
+            }
+
+            report.Add($"WALK {label}:");
+            var visited = new HashSet<object>(ReferenceComparer.Instance);
+            var budget = 600;
+            WalkContent(subject, $"{label}", 0, visited, ref budget, itemName, report);
+            if (budget <= 0)
+            {
+                report.Add("  (walk budget exhausted)");
+            }
+        }
+
+        if (inWork is not null && !ReferenceEquals(inWork, chosen))
+        {
+            var discard = inWork.GetType().GetMethods()
+                .FirstOrDefault(m => m.GetParameters().Length == 0 && m.Name.StartsWith("Discard", StringComparison.Ordinal));
+            var discardOwner = (object)inWork;
+            if (discard is null)
+            {
+                discard = liveType.GetType().GetMethods()
+                    .FirstOrDefault(m => m.GetParameters().Length == 0 && m.Name.StartsWith("Discard", StringComparison.Ordinal));
+                discardOwner = liveType;
+            }
+
+            if (discard is null)
+            {
+                report.Add("CLEANUP: NO Discard* method found - the in-work version is STILL OPEN. Discard it in TIA Portal.");
+            }
+            else
+            {
+                try
+                {
+                    discard.Invoke(discardOwner, null);
+                    report.Add($"CLEANUP: {discard.DeclaringType!.Name}.{discard.Name}() called.");
+                }
+                catch (Exception ex)
+                {
+                    var root = ex.GetBaseException();
+                    report.Add($"CLEANUP: {discard.Name}() REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()}) - the in-work version may be STILL OPEN.");
+                }
+            }
+        }
+
+        return report;
+    }
+
+    // net48 has no System.Collections.Generic.ReferenceEqualityComparer; Openness wrappers may
+    // override Equals, and the walk must dedupe on identity.
+    private sealed class ReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+    }
+
+    private static IEnumerable<string> DescribeMembers(string label, object subject)
+    {
+        var type = subject.GetType();
+        foreach (var property in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(p => p.GetIndexParameters().Length == 0).OrderBy(p => p.Name))
+        {
+            yield return $"  {label} property {property.Name} : {property.PropertyType.Name}";
+        }
+
+        foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object)).OrderBy(m => m.Name))
+        {
+            yield return $"  {label} method {method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))}) : {method.ReturnType.Name}";
+        }
+    }
+
+    // Bounded, reference-deduplicated walk of the object graph under a library type version. It
+    // follows every non-scalar property and enumerates collections, so it finds content under
+    // whatever name the API gives it rather than under the names this tool expected.
+    private static void WalkContent(object subject, string path, int depth, HashSet<object> visited, ref int budget, string? itemName, List<string> report)
+    {
+        if (depth > 5 || budget <= 0 || !visited.Add(subject))
+        {
+            return;
+        }
+
+        budget--;
+        var type = subject.GetType();
+        var name = TryRead(() => type.GetProperty("Name")?.GetValue(subject)?.ToString());
+        var hasHandlers = type.GetProperty("EventHandlers") is not null;
+        report.Add($"  {new string(' ', depth * 2)}{path}  [{type.Name}]{(name is null ? string.Empty : $" '{name}'")}{(hasHandlers ? "  (has EventHandlers)" : string.Empty)}");
+
+        if (hasHandlers && (itemName is null || string.Equals(name, itemName, StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var handler in ReadEvents(subject))
+            {
+                report.Add($"  {new string(' ', depth * 2)}  EVENT {handler.EventType}: {handler.Script?.Replace("\r", string.Empty).Replace("\n", " | ") ?? "(no script)"}");
+            }
+        }
+
+        foreach (var property in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(p => p.GetIndexParameters().Length == 0))
+        {
+            var pt = property.PropertyType;
+            if (pt.IsPrimitive || pt.IsEnum || pt == typeof(string) || pt == typeof(decimal) || pt == typeof(DateTime)
+                || property.Name is "Parent" or "EventHandlers")
+            {
+                continue;
+            }
+
+            var value = TryReadObject(() => property.GetValue(subject));
+            if (value is null)
+            {
+                continue;
+            }
+
+            if (value is System.Collections.IEnumerable items and not string)
+            {
+                var index = 0;
+                try
+                {
+                    foreach (var item in items)
+                    {
+                        if (item is null || index++ >= 60)
+                        {
+                            continue;
+                        }
+
+                        WalkContent(item, $"{property.Name}[{index - 1}]", depth + 1, visited, ref budget, itemName, report);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    report.Add($"  {new string(' ', depth * 2)}  {property.Name}: enumeration REFUSED ({ex.GetBaseException().GetType().Name})");
+                }
+            }
+            else if ((pt.Namespace ?? string.Empty).StartsWith("Siemens", StringComparison.Ordinal) || pt == typeof(object))
+            {
+                WalkContent(value, property.Name, depth + 1, visited, ref budget, itemName, report);
+            }
+        }
+    }
+
     private static object? FindLibraryTypeObject(object folder, string typeName)
     {
         if (TryReadObject(() => folder.GetType().GetProperty("Types")?.GetValue(folder)) is System.Collections.IEnumerable types)

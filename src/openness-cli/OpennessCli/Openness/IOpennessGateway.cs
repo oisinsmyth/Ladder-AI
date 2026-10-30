@@ -232,6 +232,13 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<string> ProbeExportAsDocuments(string typeName, string outDirectory);
 
     /// <summary>
+    /// Asks whether a library type version can be opened for editing and whether its CONTENT
+    /// (items, event handlers, scripts) is reachable. MUTATES the project when the version answers
+    /// an edit call (it creates an in-work version), then tries to discard it again.
+    /// </summary>
+    IReadOnlyList<string> ProbeEditLibraryType(string typeName, string? version, string? itemName);
+
+    /// <summary>
     /// Sets attributes on any object in any composition — the counterpart to
     /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the
     /// MultilingualText path (alarm texts and the like), which can only write into a language the

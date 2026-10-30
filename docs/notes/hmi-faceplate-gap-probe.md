@@ -44,7 +44,16 @@
 >    has been treated as a gate and **never once tested as one**. An empty ADVERTISEMENT is not a
 >    REFUSAL — this project has concluded "impossible" from not finding the right method four times.
 >
-> ## Status of lead 2: tooling BUILT, probe NOT RUN
+> ## Lead 2 RUN 2026-10-30 — negative for content (see `src/openness-cli/docs/core-commands.md`, `--probe-edit`)
+>
+> The type-level probe found no `Export*` method to call. The **version** has `ExportAsDocuments`:
+> an empty format is refused, every guessed format (`SimaticML`, `Yaml`, `Xml`, `Json`, `Unified`)
+> is accepted and **writes nothing**. `Edit()` and `Discard()` work, but the in-work version exposes
+> no items or event handlers, and Openness loads no Unified faceplate-content class. Faceplate type
+> scripts are not reachable through Openness V20. Lead 1 (`CreateFromDocuments` with a hand-authored
+> `ContentObject`) is untouched by this result.
+>
+> ## Status of lead 2 before 2026-10-30 (historical): tooling BUILT, probe NOT RUN
 >
 > `openness-cli library --probe-documents <TypeName> --out <dir>` is implemented and unit-tested. It
 > invokes **every** `Export*` overload on the type, including `ExportAsDocuments` with the first enum

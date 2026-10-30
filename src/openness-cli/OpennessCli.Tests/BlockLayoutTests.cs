@@ -757,6 +757,7 @@ internal sealed class FakeGateway : IOpennessGateway
         throw new NotSupportedException();
 
     public IReadOnlyList<string> ProbeExportAsDocuments(string typeName, string outDirectory) => throw new NotSupportedException();
+    public IReadOnlyList<string> ProbeEditLibraryType(string typeName, string? version, string? itemName) => throw new NotSupportedException();
 
     public IReadOnlyList<string> SetHmiObjectAttributes(
         string kind,

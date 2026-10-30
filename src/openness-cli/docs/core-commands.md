@@ -721,13 +721,42 @@ screen export — there is no document because the project never keeps one.
 
 **Exits 7 if nothing was written.**
 
-### `--probe-documents` — BUILT, NEVER RUN
+### `--probe-documents` — RUN 2026-10-30: nothing to call on a Unified faceplate type
 
 `library <project> --probe-documents <TypeName> --out <dir>`
 
 Invokes EVERY `Export*` overload including `ExportAsDocuments` **when the format list is EMPTY**,
-reporting each binding and outcome. That emptiness has been treated as a gate since P10 and never
-TESTED as one — **an empty ADVERTISEMENT is not a REFUSAL.** A throw here is a RESULT, not a bug.
+reporting each binding and outcome. A throw here is a RESULT, not a bug.
+
+**Measured (TIA V20 Update 5, a WinCC Unified faceplate type):** the plain `LibraryType` carries **no
+`Export*` method at all** besides `GetSupportedExportFormats()` (empty), so the probe reports no
+candidates and writes nothing. The document export lives on the **version** — see `--probe-edit`.
+
+### `--probe-edit` — can a library type version be edited, and is its content reachable? (2026-10-30)
+
+`library <project> --probe-edit <TypeName> [--version <v>] [--item <name>] --yes`
+
+**MUTATING** (`Edit()` creates an in-work version; the probe calls `Discard()` on it again and says
+whether that worked). Never saves the project. Scratch only. Reports every member of the type and
+version, the faceplate-related CLR types Openness loads, the version's `ExportAsDocuments` with a set
+of guessed formats, `Edit()`, and a bounded walk of both versions' object graphs to any item with
+`EventHandlers` (scripts printed for `--item`).
+
+**Measured on a WinCC Unified faceplate type (TIA V20 Update 5, Openness V20 Update 4):**
+
+| question | answer |
+|---|---|
+| `LibraryTypeVersion.Edit()` | **works** — returns a new version in state `InWork` (next version number) |
+| `LibraryTypeVersion.Discard()` | **works** — the in-work version is removed again |
+| `Release(CreateOrReleaseDependenciesMode, Version, String, String)` | exists (not called) |
+| content on the version (items, screen, event handlers) | **none** — the version's properties are metadata only (`TypeObject`, `Dependencies`, `Dependents`, `State`, …); the graph walk finds no object with `EventHandlers` |
+| a Unified faceplate *content* class in the loaded assemblies | **none** — only `HmiFaceplateContainer`/`HmiFaceplateInterface` (the instance side) and the CLASSIC `Hmi.Faceplate.FaceplateLibraryType[Version]` |
+| version `ExportAsDocuments(dir, name, exportFormat, options)` | empty format → refused ("Cannot export a version without specifying an export format or with an invalid export format"); `SimaticML`/`Yaml`/`Xml`/`Json`/`Unified` → **accepted, returns an `ExportTransferResult`, writes no file** |
+| version `Export(FileInfo, ExportOptions)` | writes a ~2.6 KB wrapper with no content object (as above) |
+
+**So a Unified faceplate type's scripts cannot be read or changed through Openness V20**: a version
+can be opened and discarded, but nothing inside it is exposed. A defect in a faceplate script is an
+engineer's edit in the TIA editor; tooling can only verify the result from the compiled runtime image.
 
 ### 🔴 THERE ARE THREE PLC COMPILE SCOPES, AND `compile` HAS ALWAYS USED THE ONE THAT COMPILES *HARDWARE* (2026-08-13)
 

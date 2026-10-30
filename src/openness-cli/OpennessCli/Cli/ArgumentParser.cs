@@ -329,7 +329,10 @@ public sealed record LibraryOptions(
     string? ExportTypeName = null,
     string? ExportVersion = null,
     string? OutDirectory = null,
-    string? ProbeDocumentsTypeName = null);
+    string? ProbeDocumentsTypeName = null,
+    string? ProbeEditTypeName = null,
+    string? ProbeItemName = null,
+    bool Confirm = false);
 
 public sealed record HmiObjectOptions(
     string ProjectIdentifier,
@@ -591,6 +594,10 @@ public static class ArgumentParser
         "  openness-cli library       <project> --probe-documents <TypeName> --out <directory>\n" +
         "    Calls EVERY Export* overload on the type - including ExportAsDocuments when GetSupportedExportFormats() is EMPTY - and reports each binding and outcome.\n" +
         "    An empty format list has been treated as a gate since P10 and has never been TESTED as one. An empty advertisement is not a refusal. A throw here is a RESULT.\n" +
+        "  openness-cli library       <project> --probe-edit <TypeName> [--version <v>] [--item <name>] --yes\n" +
+        "    MUTATING PROBE. Lists every member of the type and version, calls Edit() if offered, walks the content of the in-work and chosen versions down to items with\n" +
+        "    EventHandlers (full scripts printed for --item, or for every item without it), then calls Discard*() on any in-work version it opened and SAYS whether that worked.\n" +
+        "    Reports; never passes or fails (exit 0 unless the project cannot be opened). Scratch projects only.\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli compile-scopes <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY. Every object that answers GetService<ICompilable>(), and which of them are the SAME compiler. Compiles nothing.\n" +
@@ -3064,6 +3071,9 @@ public static class ArgumentParser
         string? exportVersion = null;
         string? outDirectory = null;
         string? probeDocumentsTypeName = null;
+        string? probeEditTypeName = null;
+        string? probeItemName = null;
+        var confirm = false;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
 
@@ -3090,6 +3100,23 @@ public static class ArgumentParser
                         return new ParseResult.Failure(probeErr);
                     }
 
+                    break;
+                case "--probe-edit":
+                    if (!TryTakeValue(args, ref i, "--probe-edit", out probeEditTypeName, out var probeEditErr))
+                    {
+                        return new ParseResult.Failure(probeEditErr);
+                    }
+
+                    break;
+                case "--item":
+                    if (!TryTakeValue(args, ref i, "--item", out probeItemName, out var itemErr))
+                    {
+                        return new ParseResult.Failure(itemErr);
+                    }
+
+                    break;
+                case "--yes":
+                    confirm = true;
                     break;
                 case "--version":
                     if (!TryTakeValue(args, ref i, "--version", out exportVersion, out var versionErr))
@@ -3146,6 +3173,29 @@ public static class ArgumentParser
         if ((exportTypeName is not null || probeDocumentsTypeName is not null) && outDirectory is null)
         {
             return new ParseResult.Failure($"--export-version and --probe-documents require --out <directory>.{Environment.NewLine}{Usage}");
+        }
+
+        if (probeEditTypeName is not null)
+        {
+            if (exportTypeName is not null || probeDocumentsTypeName is not null || outDirectory is not null)
+            {
+                return new ParseResult.Failure($"--probe-edit cannot be combined with --export-version, --probe-documents or --out.{Environment.NewLine}{Usage}");
+            }
+
+            // It calls Edit() on a library type: that creates an in-work version in the project.
+            if (!confirm)
+            {
+                return new ParseResult.Failure($"--probe-edit opens the type for editing (it MUTATES the project) and requires --yes.{Environment.NewLine}{Usage}");
+            }
+
+            return new ParseResult.LibrarySuccess(new LibraryOptions(
+                projectIdentifier, includeMasterCopies, json, tiaInstall, timeoutConnect, timeoutOpen,
+                ExportVersion: exportVersion, ProbeEditTypeName: probeEditTypeName, ProbeItemName: probeItemName, Confirm: true));
+        }
+
+        if (probeItemName is not null || confirm)
+        {
+            return new ParseResult.Failure($"--item and --yes are only meaningful with --probe-edit.{Environment.NewLine}{Usage}");
         }
 
         if (exportTypeName is null && probeDocumentsTypeName is null && (outDirectory is not null || exportVersion is not null))

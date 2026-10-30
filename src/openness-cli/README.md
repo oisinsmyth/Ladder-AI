@@ -64,7 +64,7 @@ each command is *documented*, including the ones the fence does not list.
 | `ob-cycle` | read, `--expect` or `--set` a cyclic-interrupt OB's cycle time. **Re-import reverts it** | `ob-cycle` — a cyclic OB's cycle time |
 | `download-plan` | read-only, dry-run only; device-level granularity | `download-plan` — what a download would comprise |
 | `download-probe` | the only binary that can transfer a program, allowlist-fenced | the `download-probe` sections under `## Exit codes` |
-| `library` | project-library walk; `--export-version`, `--probe-documents` | `library` — the project-library walk |
+| `library` | project-library walk; `--export-version`, `--probe-documents`, `--probe-edit` (mutating, `--yes`) | `library` — the project-library walk |
 | `delete`, `create-instance-db`, `portal-status` | delete a block (refuses safety, `--yes`); scaffold an iDB; Portal-process health | synopsis above |
 | `portal-close` | **`portal-status`'s destructive sibling — it terminates OS processes.** `--yes`-gated, **never run live** | `portal-close` — closing a stray Portal |
 | `hmi` | read-only HMI walk; `--scripts`, `--schema` | `hmi` — the read-only HMI walk |
