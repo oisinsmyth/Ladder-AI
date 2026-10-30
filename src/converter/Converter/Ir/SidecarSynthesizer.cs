@@ -66,7 +66,15 @@ public static class SidecarSynthesizer
         // The block's own interface members type its local operands (a bare TEMP `SignedValue`, a
         // STATIC struct field) — layer them onto the project-wide registry so typed boxes resolve.
         var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
-        return block.Networks.Select(network => Synthesize(network, localNames, callees, effectiveTypes)).ToList();
+        return block.Networks.Select(network => Verified(network, Synthesize(network, localNames, callees, effectiveTypes))).ToList();
+    }
+
+    // The block-level entry points refuse a written statement order no drawing can keep (RungOrderCheck),
+    // rather than letting to-xml silently move a rung.
+    private static NetworkSidecar Verified(IrNetwork network, NetworkSidecar sidecar)
+    {
+        RungOrderCheck.Verify(network, sidecar);
+        return sidecar;
     }
 
     // One network of a block, with the same block context SynthesizeBlock gives every network — used when
@@ -75,7 +83,8 @@ public static class SidecarSynthesizer
         IrBlock block, int networkIndex, CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
-        return Synthesize(block.Networks[networkIndex], ComputeLocalNames(block), callees, effectiveTypes);
+        var network = block.Networks[networkIndex];
+        return Verified(network, Synthesize(network, ComputeLocalNames(block), callees, effectiveTypes));
     }
 
     private static IEnumerable<DbMember> InterfaceMembers(IrBlock block) =>
@@ -478,9 +487,12 @@ public static class SidecarSynthesizer
 
     // The order statements are synthesized — and so the order their rungs appear in once rebuilt. An
     // explicit statement order is the source's rung order and is followed as written. A kind-ordered
-    // network (StatementOrder null) keeps the sequence synthesis has always used, so nothing that was
-    // already synthesizing changes: timers, coils, moves, then each MUL-family box beside the CONVERT
-    // it pairs with, ABS, SWAP, WAND, CALC, each T_SUB beside its T_CONV, MOVE_BLK_VARIANT, CALL.
+    // network (StatementOrder null) is drawn in the canonical kind order its text is written in
+    // (`IrStatementKind`), so the drawing never contradicts the text: timers, coils, moves, WAND, CALL,
+    // each MUL-family box beside the CONVERT it pairs with, SWAP, ABS, each T_SUB beside its T_CONV,
+    // CALC, MOVE_BLK_VARIANT. The pairs are the one departure: an ENO-chained CONVERT/T_CONV must sit
+    // directly after its box. Until 2026-10-29 CALL came last and WAND/SWAP/CALC sat elsewhere, so a
+    // real network written CALL-then-ADD (the ADD reading the CALL's output) was drawn ADD first.
     private static IEnumerable<IrStatementRef> SynthesisOrder(IrNetwork network)
     {
         if (network.StatementOrder is not null)
@@ -517,14 +529,14 @@ public static class SidecarSynthesizer
         AddAll(IrStatementKind.Timer);
         AddAll(IrStatementKind.Assignment);
         AddAll(IrStatementKind.Move);
-        AddPaired(IrStatementKind.Mul, IrStatementKind.Convert);
-        AddAll(IrStatementKind.Abs);
-        AddAll(IrStatementKind.Swap);
         AddAll(IrStatementKind.WordAnd);
-        AddAll(IrStatementKind.Calc);
-        AddPaired(IrStatementKind.TSub, IrStatementKind.TConv);
-        AddAll(IrStatementKind.MoveBlkVariant);
         AddAll(IrStatementKind.Call);
+        AddPaired(IrStatementKind.Mul, IrStatementKind.Convert);
+        AddAll(IrStatementKind.Swap);
+        AddAll(IrStatementKind.Abs);
+        AddPaired(IrStatementKind.TSub, IrStatementKind.TConv);
+        AddAll(IrStatementKind.Calc);
+        AddAll(IrStatementKind.MoveBlkVariant);
         return order;
     }
 
@@ -594,13 +606,41 @@ public static class SidecarSynthesizer
         // coil qualifies only for a GLOBAL-instance timer; a Set/Reset (latch) coil qualifies for a
         // same-network LOCAL-instance timer too — see the timer-loop comment above for the corpus
         // evidence that coil type, not scope alone, is the signal.
-        var directTimer = assignment.Condition is Expr.TagRef tag
-            ? TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath)
-              ?? (assignment.Kind is CoilKind.Set or CoilKind.Reset
-                  ? TrySplitTimerOutput(tag.Path, latchTimerPartUIdByInstancePath)
-                  : null)
-            : null;
-        if (directTimer is (int tonPartUId, string port))
+        (int TonPartUId, string Port)? SameNetworkTimerQ(string path) =>
+            TrySplitTimerOutput(path, timerPartUIdByInstancePath)
+            ?? (assignment.Kind is CoilKind.Set or CoilKind.Reset
+                ? TrySplitTimerOutput(path, latchTimerPartUIdByInstancePath)
+                : null);
+
+        var directTimer = assignment.Condition is Expr.TagRef tag ? SameNetworkTimerQ(tag.Path) : null;
+
+        // `Timer.Q AND <leaf/compare>...`: the Q LEADS a series chain (2026-10-29, live-run conveyor
+        // networks, `COIL x := DelayTimer.Q AND Rate <> 0.0`). The real export wires the TON's Q
+        // straight into the first series element (steps: timeroutput, compare), keeping coil and TON in ONE
+        // rung. Built as an Access contact instead, the coil became a rung of its own, and once TIA's
+        // rung-contiguous Part order is applied it could no longer sit between the TON and a later coil
+        // sharing the TON's branches — the round trip moved it below that coil. Only the plain shape is
+        // taken: no fan-out marker anywhere, and every operand after the Q a leaf or a compare.
+        var chainOperands = assignment.Condition is Expr.And ? FlattenAnd(assignment.Condition) : null;
+        var leadingTimer = chainOperands is { Count: >= 2 }
+            && chainOperands[0] is Expr.TagRef { Fanout: null } first
+            && chainOperands.All(o => o.Fanout is null)
+            && chainOperands.Skip(1).All(o => o is Expr.Compare || IsLeaf(o))
+                ? SameNetworkTimerQ(first.Path)
+                : null;
+
+        if (directTimer is null && leadingTimer is (int leadTonPartUId, string leadPort))
+        {
+            chainRail = null; // fed by the timer's Q, never the rail
+            var chainSteps = new List<ChainStepSidecar> { new ChainStepSidecar.TimerOutputStep(leadTonPartUId, leadPort, nextUid++) };
+            for (var idx = 1; idx < chainOperands!.Count; idx++)
+            {
+                chainSteps.Add(BuildStep(chainOperands[idx], idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes));
+            }
+
+            steps = chainSteps;
+        }
+        else if (directTimer is (int tonPartUId, string port))
         {
             chainRail = null; // fed by the timer's Q, never the rail
 
@@ -640,9 +680,9 @@ public static class SidecarSynthesizer
     }
 
     // A `<instancePath>.Q` read of a timer built in this same network → (its TON part UId, "Q"), else
-    // null. Only the whole-condition case is handled (a coil reads exactly one timer's Q, TimerSample's
-    // shape); a same-network Q *mid-chain* would need a TimerOutputStep inside BuildChain — not seen in
-    // the corpus (N3's multi-term reads are all cross-network), left for when a real case appears.
+    // null. BuildAssignment wires it for the whole condition (TimerSample's shape) and for a Q LEADING a
+    // series chain (2026-10-29). A same-network Q later in a chain, or inside an OR, still becomes a
+    // contact; no real case of either has been seen.
     private static (int TonPartUId, string Port)? TrySplitTimerOutput(
         string path, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath)
     {
@@ -1011,6 +1051,7 @@ public static class SidecarSynthesizer
                 // failed to import, by construction.
                 var constantType = typedConstant || IsDurationLiteral(literal.Value)
                     ? null
+                    : IsBeyondRealRange(literal.Value) ? "LReal"
                     : (portType ?? InferLiteralConstantType(literal.Value) ?? throw new UnsupportedSynthesisConstructException(
                         $"Cannot type the literal '{literal.Value}': it is a base-prefixed (bit-string) literal, whose "
                         + "width is a declaration choice its digits cannot express, and the port it feeds has no "
@@ -1055,8 +1096,18 @@ public static class SidecarSynthesizer
     // is not a Real, and a base prefix now short-circuits before that test can misread one.
     private static string? InferLiteralConstantType(string value) =>
         IsBasePrefixedLiteral(value) ? null
-        : value.Contains('.') ? "Real"
+        : IsBeyondRealRange(value) ? "LReal"
+        : value.Contains('.') || value.Contains('e') || value.Contains('E') ? "Real"
         : InferIntegerLiteralType(value);
+
+    // A floating literal no Real can hold (|v| > 3.40282347E+38) is an LReal constant whatever the
+    // port's type: TIA exports `MOVE(IN := 1.0E+64) => <Real>` with ConstantType LReal, and a Real
+    // constant of that value cannot exist. Base-prefixed and integer literals are never floats here.
+    private static bool IsBeyondRealRange(string value) =>
+        !IsBasePrefixedLiteral(value)
+        && (value.Contains('.') || value.Contains('e') || value.Contains('E'))
+        && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d)
+        && Math.Abs(d) > float.MaxValue;
 
     // Siemens' `<base>#<value>` notation, the same shape IrParser.ParseLeaf matches generically by
     // base-number shape rather than hardcoding base 16 (S1 item 12) — so `2#1011` and `8#77` are
@@ -1593,7 +1644,8 @@ public static class SidecarSynthesizer
             instanceComponentPath = TagPath.Split(instancePath);
         }
 
-        var arguments = BuildCallArguments(call, callees, ref nextUid, accessEntries, constantEntries, localNames);
+        var arguments = BuildCallArguments(
+            call, callees, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
 
         return new CallStatementSidecar(
             callPartUId,
@@ -1614,8 +1666,9 @@ public static class SidecarSynthesizer
     // not semantically load-bearing. Every failure is an explicit hard-error naming the callee +
     // parameter, never a silent guess (hard rule 7).
     private static IReadOnlyList<CallArgumentSidecar> BuildCallArguments(
-        CallStatement call, CalleeInterfaceRegistry callees, ref int nextUid,
-        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        CallStatement call, CalleeInterfaceRegistry callees, int sharedRailWireUId, ref int nextUid,
+        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         if (call.Arguments.Count == 0)
         {
@@ -1636,6 +1689,25 @@ public static class SidecarSynthesizer
         {
             switch (argument)
             {
+                case CallArgument.InputArg input
+                    when input.Value is Expr.And or Expr.Or or Expr.Not or Expr.Compare:
+                {
+                    // A boolean expression into an Input is power flow: a Contact chain wired straight
+                    // into the parameter, as the real export does (2026-10-29), not an operand.
+                    var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
+                    if (!string.Equals(param.Type, "Bool", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new UnsupportedSynthesisConstructException(
+                            $"Network: CALL to '{call.BlockName}' passes an expression to '{input.ParamName}', which is " +
+                            $"{param.Type}; only a Bool parameter can take a contact chain.");
+                    }
+
+                    var (chainRail, chainSteps) = BuildChain(
+                        input.Value, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
+                    arguments.Add(new CallArgumentSidecar.ChainInputArgSidecar(input.ParamName, param.Type, chainRail, chainSteps));
+                    break;
+                }
+
                 case CallArgument.InputArg input:
                 {
                     var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
@@ -1660,6 +1732,16 @@ public static class SidecarSynthesizer
                     break;
                 }
 
+                case CallArgument.InOutArg inOut:
+                {
+                    var param = RequireParam(call.BlockName, inOut.ParamName, "InOut", parms);
+                    var accessUId = nextUid++;
+                    accessEntries.Add(Access(inOut.Tag, accessUId, localNames));
+                    var wireUId = nextUid++;
+                    arguments.Add(new CallArgumentSidecar.InOutArgSidecar(inOut.ParamName, param.Type, accessUId, wireUId));
+                    break;
+                }
+
                 default:
                     throw new UnsupportedSynthesisConstructException($"Unsupported call argument kind: {argument.GetType().Name}");
             }
@@ -1669,7 +1751,8 @@ public static class SidecarSynthesizer
     }
 
     // Resolves a CALL parameter against the callee interface: it must exist and its section must match
-    // the argument shape (an Input `:=` arg must be an Input param, an Output `=>` arg an Output param).
+    // the argument shape (an Input `:=` arg must be an Input param, an Output `=>` arg an Output param,
+    // an InOut `<=>` arg an InOut param).
     private static CalleeInterfaceRegistry.Param RequireParam(
         string blockName, string paramName, string expectedSection,
         IReadOnlyDictionary<string, CalleeInterfaceRegistry.Param> parms)
@@ -1677,8 +1760,8 @@ public static class SidecarSynthesizer
         if (!parms.TryGetValue(paramName, out var param))
         {
             throw new UnsupportedSynthesisConstructException(
-                $"Network: CALL to '{blockName}' names parameter '{paramName}', which is not an Input or Output " +
-                "parameter of the callee (InOut is not supported in synthesis).");
+                $"Network: CALL to '{blockName}' names parameter '{paramName}', which is not an Input, Output or " +
+                "InOut parameter of the callee.");
         }
 
         if (param.Section != expectedSection)

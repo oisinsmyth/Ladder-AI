@@ -349,12 +349,10 @@ public static class FlgNetWriter
             return network.Parts.Select(p => p.UId).ToList();
         }
 
-        // Producer -> consumer adjacency among Parts, plus the rail-connected roots. Each wire lists its
-        // producer endpoint first (the power rail, or a Part's output port), then its consumer endpoints;
-        // an <IdentCon> producer is an <Access> data source (a leaf, not a Part) and is skipped for the
-        // instruction-Part flow. Consumer order within a wire is preserved (a producer's fan-out order).
+        // Producer -> consumer adjacency among Parts. Each wire lists its producer endpoint first (the
+        // power rail, or a Part's output port), then its consumer endpoints; an <IdentCon> producer is an
+        // <Access> data source (a leaf, not a Part) and, like the rail, adds no Part-to-Part edge.
         var adjacency = partByUId.Keys.ToDictionary(uid => uid, _ => new List<int>());
-        var railRoots = new List<int>();
         foreach (var wire in network.Wires)
         {
             if (wire.Endpoints.Count == 0)
@@ -367,44 +365,82 @@ public static class FlgNetWriter
                 .Where(e => e.Kind == EndpointKind.NameCon && e.UId is int cu && partByUId.ContainsKey(cu))
                 .Select(e => e.UId!.Value);
 
-            if (producer.Kind == EndpointKind.Powerrail)
-            {
-                railRoots.AddRange(consumers);
-            }
-            else if (producer.Kind == EndpointKind.NameCon && producer.UId is int pu && adjacency.ContainsKey(pu))
+            if (producer.Kind == EndpointKind.NameCon && producer.UId is int pu && adjacency.ContainsKey(pu))
             {
                 adjacency[pu].AddRange(consumers);
             }
         }
 
+        // Rung by rung, and within a rung topologically with the LOWEST ready UId first.
+        //
+        // A rung is a connected group of Parts, and TIA rejects a network whose rungs interleave ("must be
+        // sorted according to the current flow"): a TON must be followed by the coil its Q feeds, not by an
+        // unrelated rung that happens to sit between them in UId order. Rungs are taken in order of their
+        // lowest UId. Inside a rung, every producer precedes its consumers and ties go to the lowest UId,
+        // which is how TIA itself writes a rung (its UIds are minted in drawing order, as synthesis mints in
+        // statement order).
+        //
+        // This replaced a depth-first walk from the rail (2026-10-29). Inside a rung with a SHARED branch,
+        // that walk emitted the coil fed from the branch straight after it, ahead of a coil written above it
+        // in the same rung: two independent coils in a live-run conveyor network swapped places on a
+        // to-xml -> to-ir round trip.
+        var neighbours = partByUId.Keys.ToDictionary(uid => uid, _ => new List<int>());
+        var indegree = partByUId.Keys.ToDictionary(uid => uid, _ => 0);
+        foreach (var (producerUId, consumers) in adjacency)
+        {
+            foreach (var consumer in consumers)
+            {
+                neighbours[producerUId].Add(consumer);
+                neighbours[consumer].Add(producerUId);
+                indegree[consumer]++;
+            }
+        }
+
         var order = new List<int>(partByUId.Count);
-        var visited = new HashSet<int>();
-
-        void Visit(int uid)
+        var placed = new HashSet<int>();
+        foreach (var seed in partByUId.Keys.OrderBy(uid => uid))
         {
-            if (!visited.Add(uid))
+            if (placed.Contains(seed))
             {
-                return;
+                continue;
             }
 
-            order.Add(uid);
-            foreach (var consumer in adjacency[uid])
+            // The seed's rung: every Part connected to it, in either direction.
+            var rung = new HashSet<int> { seed };
+            var stack = new Stack<int>();
+            stack.Push(seed);
+            while (stack.Count > 0)
             {
-                Visit(consumer);
+                foreach (var next in neighbours[stack.Pop()])
+                {
+                    if (rung.Add(next))
+                    {
+                        stack.Push(next);
+                    }
+                }
             }
-        }
 
-        foreach (var root in railRoots)
-        {
-            Visit(root);
-        }
-
-        // Any Part not reachable from the rail (defensive — every Part should be) is appended in UId order.
-        foreach (var part in network.Parts.OrderBy(p => p.UId))
-        {
-            if (!visited.Contains(part.UId))
+            var ready = new SortedSet<int>(rung.Where(uid => indegree[uid] == 0));
+            while (ready.Count > 0)
             {
-                Visit(part.UId);
+                var uid = ready.Min;
+                ready.Remove(uid);
+                order.Add(uid);
+                placed.Add(uid);
+                foreach (var consumer in adjacency[uid])
+                {
+                    if (--indegree[consumer] == 0)
+                    {
+                        ready.Add(consumer);
+                    }
+                }
+            }
+
+            // A cycle would leave Parts unplaced (defensive — LAD flow has none); they follow in UId order.
+            foreach (var uid in rung.Where(uid => !placed.Contains(uid)).OrderBy(uid => uid))
+            {
+                order.Add(uid);
+                placed.Add(uid);
             }
         }
 

@@ -2395,6 +2395,307 @@ public sealed class OpennessGateway : IOpennessGateway
         return report;
     }
 
+    /// <summary>
+    /// Asks a library type version whether it can be opened for editing, and whether the content
+    /// of either the released or the in-work version can be walked down to an item's event
+    /// handlers.
+    /// </summary>
+    /// <remarks>
+    /// The faceplate-script question (2026-10-30, a live run): a defect sits in a library
+    /// faceplate's button script, and no command could reach it. The surveys recorded "faceplate
+    /// types are not walked" — a statement about this tool, never a measurement of the API. This
+    /// probe makes the measurement: every member the version offers, any Edit() and what it
+    /// returns, a bounded walk of whatever object graph hangs off both versions, and the scripts of
+    /// any item named <paramref name="itemName"/>. A throw is a RESULT and is reported, not raised.
+    /// An in-work version it created is discarded again where the API offers a way; the report
+    /// says whether that happened, because a probe that leaves an edit open must not look clean.
+    /// </remarks>
+    public IReadOnlyList<string> ProbeEditLibraryType(string typeName, string? version, string? itemName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ProbeEditLibraryType)}.");
+        }
+
+        var library = TryReadObject(() => _project.GetType().GetProperty("ProjectLibrary")?.GetValue(_project))
+            ?? throw new InvalidOperationException("Project has no ProjectLibrary.");
+        var typeFolder = TryReadObject(() => library.GetType().GetProperty("TypeFolder")?.GetValue(library))
+            ?? throw new InvalidOperationException("Project library has no TypeFolder.");
+        var liveType = FindLibraryTypeObject(typeFolder, typeName)
+            ?? throw new InvalidOperationException($"No library type named '{typeName}'.");
+
+        var report = new List<string> { $"type: {typeName}  [{liveType.GetType().FullName}]" };
+        report.AddRange(DescribeMembers("type", liveType));
+
+        object? chosen = null;
+        if (TryReadObject(() => liveType.GetType().GetProperty("Versions")?.GetValue(liveType)) is System.Collections.IEnumerable versions)
+        {
+            foreach (var candidate in versions)
+            {
+                if (candidate is null)
+                {
+                    continue;
+                }
+
+                var label = TryReadObject(() => candidate.GetType().GetProperty("VersionNumber")?.GetValue(candidate))?.ToString() ?? string.Empty;
+                var isDefault = TryReadObject(() => candidate.GetType().GetProperty("IsDefault")?.GetValue(candidate)) as bool? ?? false;
+                var state = TryReadObject(() => candidate.GetType().GetProperty("State")?.GetValue(candidate))?.ToString() ?? "?";
+                report.Add($"version: {label}  state={state}  default={isDefault}");
+                if (version is null ? isDefault : label.Equals(version, StringComparison.OrdinalIgnoreCase))
+                {
+                    chosen = candidate;
+                }
+            }
+        }
+
+        if (chosen is null)
+        {
+            report.Add("NO VERSION SELECTED - nothing further probed.");
+            return report;
+        }
+
+        report.Add($"chosen version CLR type: {chosen.GetType().FullName}");
+        report.AddRange(DescribeMembers("version", chosen));
+
+        report.Add("faceplate-related CLR types in loaded Siemens.Engineering assemblies:");
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => (a.GetName().Name ?? string.Empty).StartsWith("Siemens.Engineering", StringComparison.Ordinal)))
+        {
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (System.Reflection.ReflectionTypeLoadException ex)
+            {
+                types = ex.Types.Where(t => t is not null).ToArray()!;
+            }
+
+            foreach (var t in types.Where(t => t.IsPublic && t.Name.IndexOf("Faceplate", StringComparison.OrdinalIgnoreCase) >= 0).OrderBy(t => t.FullName))
+            {
+                report.Add($"  {t.FullName}");
+            }
+        }
+
+        // The version declares its own ExportAsDocuments(DirectoryInfo, String, String, ...), distinct
+        // from the type-level one --probe-documents tries. A document export is the only content
+        // route left once the object graph offers none, so it is tried here rather than assumed.
+        var documents = chosen.GetType().GetMethods().FirstOrDefault(m => m.Name == "ExportAsDocuments" && m.GetParameters().Length == 4);
+        if (documents is null)
+        {
+            report.Add("DOCUMENTS: no four-argument ExportAsDocuments on the version.");
+        }
+        else
+        {
+            var parameters = documents.GetParameters();
+            report.Add($"DOCUMENTS: signature ExportAsDocuments({string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"))})");
+            var optionsValue = Enum.GetValues(parameters[3].ParameterType).Cast<object>().First();
+
+            // The advertised format list is empty for every HMI type, so the format argument is
+            // guessed: the names other Openness document exports use. A refusal for each is the
+            // answer, not a failure of the probe.
+            foreach (var format in new[] { string.Empty, "SimaticML", "Yaml", "YAML", "Xml", "Json", "Unified" })
+            {
+                var docDir = Path.Combine(Path.GetTempPath(), "openness-probe-docs-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(docDir);
+                try
+                {
+                    var result = documents.Invoke(chosen, new object[] { new DirectoryInfo(docDir), typeName, format, optionsValue });
+                    report.Add($"DOCUMENTS[{format}]: returned {result?.GetType().Name ?? "null"} ({TryRead(() => result?.GetType().GetProperty("State")?.GetValue(result)?.ToString()) ?? "no State"})");
+                }
+                catch (Exception ex)
+                {
+                    // Openness wraps the reason; the innermost message is the one that names it.
+                    var inner = ex;
+                    while (inner.InnerException is not null)
+                    {
+                        inner = inner.InnerException;
+                    }
+
+                    report.Add($"DOCUMENTS[{format}]: REFUSED {inner.GetType().Name}: {inner.Message.Replace("\r", " ").Replace("\n", " ").Trim()}");
+                }
+
+                foreach (var file in Directory.GetFiles(docDir, "*", SearchOption.AllDirectories))
+                {
+                    var text = File.ReadAllText(file);
+                    report.Add($"DOCUMENTS[{format}]: {file} ({text.Length} chars){(itemName is not null && text.IndexOf(itemName, StringComparison.Ordinal) >= 0 ? $" CONTAINS '{itemName}'" : string.Empty)}");
+                }
+            }
+        }
+
+        object? inWork = null;
+        var edit = chosen.GetType().GetMethods().FirstOrDefault(m => m.Name == "Edit" && m.GetParameters().Length == 0)
+            ?? liveType.GetType().GetMethods().FirstOrDefault(m => m.Name == "Edit" && m.GetParameters().Length == 0);
+        if (edit is null)
+        {
+            report.Add("EDIT: no parameterless Edit() on the version or the type.");
+        }
+        else
+        {
+            try
+            {
+                inWork = edit.Invoke(edit.DeclaringType!.IsInstanceOfType(chosen) ? chosen : liveType, null);
+                report.Add($"EDIT: {edit.DeclaringType!.Name}.Edit() returned {(inWork is null ? "null" : inWork.GetType().FullName)}");
+                if (inWork is not null)
+                {
+                    var label = TryReadObject(() => inWork.GetType().GetProperty("VersionNumber")?.GetValue(inWork))?.ToString() ?? "?";
+                    var state = TryReadObject(() => inWork.GetType().GetProperty("State")?.GetValue(inWork))?.ToString() ?? "?";
+                    report.Add($"EDIT: in-work version {label} state={state}");
+                    report.AddRange(DescribeMembers("in-work", inWork));
+                }
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                report.Add($"EDIT: REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        foreach (var (label, subject) in new[] { ("in-work", inWork), ("chosen", chosen) })
+        {
+            if (subject is null)
+            {
+                continue;
+            }
+
+            report.Add($"WALK {label}:");
+            var visited = new HashSet<object>(ReferenceComparer.Instance);
+            var budget = 600;
+            WalkContent(subject, $"{label}", 0, visited, ref budget, itemName, report);
+            if (budget <= 0)
+            {
+                report.Add("  (walk budget exhausted)");
+            }
+        }
+
+        if (inWork is not null && !ReferenceEquals(inWork, chosen))
+        {
+            var discard = inWork.GetType().GetMethods()
+                .FirstOrDefault(m => m.GetParameters().Length == 0 && m.Name.StartsWith("Discard", StringComparison.Ordinal));
+            var discardOwner = (object)inWork;
+            if (discard is null)
+            {
+                discard = liveType.GetType().GetMethods()
+                    .FirstOrDefault(m => m.GetParameters().Length == 0 && m.Name.StartsWith("Discard", StringComparison.Ordinal));
+                discardOwner = liveType;
+            }
+
+            if (discard is null)
+            {
+                report.Add("CLEANUP: NO Discard* method found - the in-work version is STILL OPEN. Discard it in TIA Portal.");
+            }
+            else
+            {
+                try
+                {
+                    discard.Invoke(discardOwner, null);
+                    report.Add($"CLEANUP: {discard.DeclaringType!.Name}.{discard.Name}() called.");
+                }
+                catch (Exception ex)
+                {
+                    var root = ex.GetBaseException();
+                    report.Add($"CLEANUP: {discard.Name}() REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()}) - the in-work version may be STILL OPEN.");
+                }
+            }
+        }
+
+        return report;
+    }
+
+    // net48 has no System.Collections.Generic.ReferenceEqualityComparer; Openness wrappers may
+    // override Equals, and the walk must dedupe on identity.
+    private sealed class ReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+    }
+
+    private static IEnumerable<string> DescribeMembers(string label, object subject)
+    {
+        var type = subject.GetType();
+        foreach (var property in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(p => p.GetIndexParameters().Length == 0).OrderBy(p => p.Name))
+        {
+            yield return $"  {label} property {property.Name} : {property.PropertyType.Name}";
+        }
+
+        foreach (var method in type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(m => !m.IsSpecialName && m.DeclaringType != typeof(object)).OrderBy(m => m.Name))
+        {
+            yield return $"  {label} method {method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))}) : {method.ReturnType.Name}";
+        }
+    }
+
+    // Bounded, reference-deduplicated walk of the object graph under a library type version. It
+    // follows every non-scalar property and enumerates collections, so it finds content under
+    // whatever name the API gives it rather than under the names this tool expected.
+    private static void WalkContent(object subject, string path, int depth, HashSet<object> visited, ref int budget, string? itemName, List<string> report)
+    {
+        if (depth > 5 || budget <= 0 || !visited.Add(subject))
+        {
+            return;
+        }
+
+        budget--;
+        var type = subject.GetType();
+        var name = TryRead(() => type.GetProperty("Name")?.GetValue(subject)?.ToString());
+        var hasHandlers = type.GetProperty("EventHandlers") is not null;
+        report.Add($"  {new string(' ', depth * 2)}{path}  [{type.Name}]{(name is null ? string.Empty : $" '{name}'")}{(hasHandlers ? "  (has EventHandlers)" : string.Empty)}");
+
+        if (hasHandlers && (itemName is null || string.Equals(name, itemName, StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var handler in ReadEvents(subject))
+            {
+                report.Add($"  {new string(' ', depth * 2)}  EVENT {handler.EventType}: {handler.Script?.Replace("\r", string.Empty).Replace("\n", " | ") ?? "(no script)"}");
+            }
+        }
+
+        foreach (var property in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(p => p.GetIndexParameters().Length == 0))
+        {
+            var pt = property.PropertyType;
+            if (pt.IsPrimitive || pt.IsEnum || pt == typeof(string) || pt == typeof(decimal) || pt == typeof(DateTime)
+                || property.Name is "Parent" or "EventHandlers")
+            {
+                continue;
+            }
+
+            var value = TryReadObject(() => property.GetValue(subject));
+            if (value is null)
+            {
+                continue;
+            }
+
+            if (value is System.Collections.IEnumerable items and not string)
+            {
+                var index = 0;
+                try
+                {
+                    foreach (var item in items)
+                    {
+                        if (item is null || index++ >= 60)
+                        {
+                            continue;
+                        }
+
+                        WalkContent(item, $"{property.Name}[{index - 1}]", depth + 1, visited, ref budget, itemName, report);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    report.Add($"  {new string(' ', depth * 2)}  {property.Name}: enumeration REFUSED ({ex.GetBaseException().GetType().Name})");
+                }
+            }
+            else if ((pt.Namespace ?? string.Empty).StartsWith("Siemens", StringComparison.Ordinal) || pt == typeof(object))
+            {
+                WalkContent(value, property.Name, depth + 1, visited, ref budget, itemName, report);
+            }
+        }
+    }
+
     private static object? FindLibraryTypeObject(object folder, string typeName)
     {
         if (TryReadObject(() => folder.GetType().GetProperty("Types")?.GetValue(folder)) is System.Collections.IEnumerable types)
@@ -4162,7 +4463,13 @@ public sealed class OpennessGateway : IOpennessGateway
             var unifiedHit = unifiedDevices.FirstOrDefault(u => u.Software.TagTables.Find(tagTableName) is not null);
             if (unifiedHit.Software is not null)
             {
-                throw new HmiClassicOnlyObjectException("HMI tag table", tagTableName, unifiedHit.Path);
+                // A Unified table has no SimaticML Export; its HmiTagComposition.Export writes its own
+                // file format into a directory. --out names that directory, created if missing.
+                // Openness reads the DirectoryInfo's original path string, and refuses a forward-slash
+                // path as "relative"; FullName is the normalised absolute form.
+                var dir = new DirectoryInfo(Directory.CreateDirectory(outPath).FullName);
+                unifiedHit.Software.TagTables.Find(tagTableName).Tags.Export(dir);
+                return;
             }
 
             // The present-set is the whole classic corpus, NOT the device-narrowed one: a --device
@@ -4289,6 +4596,14 @@ public sealed class OpennessGateway : IOpennessGateway
 
     public HmiClassicImportOutcome ImportHmiTagTables(string? deviceFilter, IReadOnlyList<string> files)
     {
+        // A Unified tag table travels as `<table>.hmi.yml`, the file `export --hmitagtable` writes
+        // for a Unified device. Routed on the file, not the device: a project holding both kinds
+        // would otherwise need --device to say which side a document belongs to.
+        if (files.Count > 0 && files.All(f => f.EndsWith(".hmi.yml", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ImportUnifiedTagTables(deviceFilter, files);
+        }
+
         var (target, devicePath) = ResolveSingleClassicTarget(deviceFilter);
 
         var (containersBefore, membersBefore) = CountClassicTags(target);
@@ -4347,6 +4662,73 @@ public sealed class OpennessGateway : IOpennessGateway
             membersAfter,
             returned,
             presentAfter.Select(p => p.Table.Name).OrderBy(n => n, StringComparer.Ordinal).ToList(),
+            files);
+    }
+
+    // Unified: HmiTagComposition.Import reads `<name>.hmi.yml` from a directory into ONE table, so
+    // the table is named by the file and created first if missing. This is the only Openness route
+    // that carries a tag's array-index multiplexing (`SymbolicAddress: Db.Arr[IndexTag].Member`):
+    // HmiTag has no attribute for it, and set_PlcTag refuses every indexed form (measured
+    // 2026-10-29).
+    private HmiClassicImportOutcome ImportUnifiedTagTables(string? deviceFilter, IReadOnlyList<string> files)
+    {
+        var (_, unifiedDevices) = CollectHmiDevices();
+        var narrowed = deviceFilter is null
+            ? unifiedDevices
+            : unifiedDevices.Where(u => u.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        if (narrowed.Count != 1)
+        {
+            throw new HmiClassicDeviceNotResolvedException(
+                deviceFilter, Array.Empty<string>(), narrowed.Select(u => u.Path).ToList());
+        }
+
+        var (software, devicePath) = narrowed[0];
+        int TagCount() => software.TagTables.Sum(t => t.Tags.Count);
+        var tablesBefore = software.TagTables.Count;
+        var tagsBefore = TagCount();
+        var returned = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                var full = Path.GetFullPath(file);
+                var fileName = Path.GetFileName(full);
+                var tableName = fileName.Substring(0, fileName.Length - ".hmi.yml".Length);
+                try
+                {
+                    var table = software.TagTables.Find(tableName) ?? software.TagTables.Create(tableName);
+                    // Same normalisation as the export: Openness refuses a forward-slash path as relative.
+                    var dir = new DirectoryInfo(new DirectoryInfo(Path.GetDirectoryName(full)!).FullName);
+                    // Import(dir, name) is refused in V20 ("will be available in future versions");
+                    // the one-argument form reads the table's own `<table>.hmi.yml` from the directory.
+                    if (!table.Tags.Import(dir))
+                    {
+                        throw new HmiClassicImportFailedException("HMI tag table", file, "Import() returned false");
+                    }
+
+                    returned.Add(tableName);
+                }
+                catch (Exception ex) when (ex is not HmiClassicImportFailedException)
+                {
+                    throw new HmiClassicImportFailedException("HMI tag table", file, DescribeChain(ex));
+                }
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        return new HmiClassicImportOutcome(
+            "HMI tag table",
+            devicePath,
+            tablesBefore,
+            software.TagTables.Count,
+            tagsBefore,
+            TagCount(),
+            returned,
+            software.TagTables.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList(),
             files);
     }
 
@@ -6007,6 +6389,97 @@ public sealed class OpennessGateway : IOpennessGateway
         return new BlockLayoutResult(
             reread.Name, rereadPath, ClassifyBlockType(reread), ReadMemoryLayout(reread, blockName),
             before, requested);
+    }
+
+    // The attribute names are Openness's own dynamic ones, read off a real V20 cyclic-interrupt OB's
+    // GetAttributeInfos (2026-10-29) - the phase shift TIA's UI shows is `PhaseOffset` here. The
+    // assembly has no typed property for either, and neither appears in a V20 export, so this is the
+    // only route to them.
+    private const string CyclicTimeAttribute = "CyclicTime";
+    private const string PhaseShiftAttribute = "PhaseOffset";
+
+    public ObCycleResult GetObCycle(string blockName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(GetObCycle)}.");
+        }
+
+        var (block, path) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (cyclic, phase) = ReadObCycle(block, blockName, "read");
+        return new ObCycleResult(block.Name, path, cyclic, phase, null, null, null, null);
+    }
+
+    // Same paranoid read-back as SetBlockMemoryLayout: re-resolve after the save and read the fresh
+    // object, so a cached value cannot answer the question.
+    public ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(SetObCycle)}.");
+        }
+
+        var (block, _) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (beforeCyclic, beforePhase) = ReadObCycle(block, blockName, "set");
+
+        try
+        {
+            SetNumericAttribute(block, CyclicTimeAttribute, cyclicTimeMs);
+            if (phaseShiftMs is { } phase)
+            {
+                SetNumericAttribute(block, PhaseShiftAttribute, phase);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new ObCycleUnavailableException(blockName, "set", AttributeNames(block), ex);
+        }
+
+        SaveProject();
+
+        var (reread, rereadPath) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (afterCyclic, afterPhase) = ReadObCycle(reread, blockName, "read back");
+        return new ObCycleResult(
+            reread.Name, rereadPath, afterCyclic, afterPhase, beforeCyclic, beforePhase, cyclicTimeMs, phaseShiftMs);
+    }
+
+    private static (long CyclicTimeMs, long PhaseShiftMs) ReadObCycle(PlcBlock block, string blockName, string operation)
+    {
+        var names = AttributeNames(block);
+        if (!names.Contains(CyclicTimeAttribute, StringComparer.Ordinal) || !names.Contains(PhaseShiftAttribute, StringComparer.Ordinal))
+        {
+            throw new ObCycleUnavailableException(blockName, operation, names);
+        }
+
+        try
+        {
+            return (Convert.ToInt64(block.GetAttribute(CyclicTimeAttribute)), Convert.ToInt64(block.GetAttribute(PhaseShiftAttribute)));
+        }
+        catch (Exception ex)
+        {
+            throw new ObCycleUnavailableException(blockName, operation, names, ex);
+        }
+    }
+
+    // SetAttribute is strict about the runtime type, so the value is converted to the type the
+    // attribute's own schema declares rather than passed as a long and left to fail.
+    private static void SetNumericAttribute(PlcBlock block, string attribute, long value)
+    {
+        var info = block.GetAttributeInfos().First(i => string.Equals(i.Name, attribute, StringComparison.Ordinal));
+        var targetType = info.SupportedTypes?.FirstOrDefault() ?? typeof(int);
+        block.SetAttribute(attribute, Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static IReadOnlyList<string> AttributeNames(PlcBlock block)
+    {
+        try
+        {
+            return block.GetAttributeInfos().Select(i => i.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     // The resolve-then-refuse-safety preamble that ExportBlock/DeleteBlock/CompileBlock each spell

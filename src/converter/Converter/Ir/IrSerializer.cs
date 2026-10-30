@@ -182,6 +182,9 @@ public static class IrSerializer
                             case CallArgument.OutputArg output:
                                 sb.Append(", ").Append(output.ParamName).Append(" => ").Append(output.DestTag);
                                 break;
+                            case CallArgument.InOutArg inOut:
+                                sb.Append(", ").Append(inOut.ParamName).Append(" <=> ").Append(inOut.Tag);
+                                break;
                             default:
                                 throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
                         }
@@ -1087,6 +1090,20 @@ public static class IrSerializer
                 sb.Append(indent).Append("argument ").Append(index).Append(" output ").Append(output.ParamName).Append(' ').Append(output.Type).Append('\n');
                 sb.Append(indent).Append("  dest = ").Append(output.DestAccessUId).Append('\n');
                 sb.Append(indent).Append("  destwire = ").Append(output.DestWireUId).Append('\n');
+                break;
+            case CallArgumentSidecar.ChainInputArgSidecar chain:
+                sb.Append(indent).Append("argument ").Append(index).Append(" chaininput ").Append(chain.ParamName).Append(' ').Append(chain.Type).Append('\n');
+                sb.Append(indent).Append("  rail = ").Append(SerializeRail(chain.RailWireUId)).Append('\n');
+                for (var s = 0; s < chain.Steps.Count; s++)
+                {
+                    SerializeStep(sb, indent + "  ", $"step {s}", chain.Steps[s]);
+                }
+
+                break;
+            case CallArgumentSidecar.InOutArgSidecar inOut:
+                sb.Append(indent).Append("argument ").Append(index).Append(" inout ").Append(inOut.ParamName).Append(' ').Append(inOut.Type).Append('\n');
+                sb.Append(indent).Append("  access = ").Append(inOut.AccessUId).Append('\n');
+                sb.Append(indent).Append("  wire = ").Append(inOut.WireUId).Append('\n');
                 break;
             default:
                 throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");

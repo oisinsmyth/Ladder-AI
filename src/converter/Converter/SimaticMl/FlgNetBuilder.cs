@@ -667,6 +667,8 @@ public static class FlgNetBuilder
         {
             CallArgumentSidecar.InputArgSidecar input => new CallParameterNode(input.ParamName, "Input", input.Type),
             CallArgumentSidecar.OutputArgSidecar output => new CallParameterNode(output.ParamName, "Output", output.Type),
+            CallArgumentSidecar.InOutArgSidecar inOut => new CallParameterNode(inOut.ParamName, "InOut", inOut.Type),
+            CallArgumentSidecar.ChainInputArgSidecar chain => new CallParameterNode(chain.ParamName, "Input", chain.Type),
             _ => throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}"),
         }).ToList();
 
@@ -688,6 +690,18 @@ public static class FlgNetBuilder
                     // is the only direction signal the document carries (`ir/SPEC.md` §Interface —
                     // a call site does not mark a parameter as Input, Output or InOut at all).
                     AddProducedWire(wireEndpointsByUId, output.DestWireUId, sidecar.CallPartUId, output.ParamName, output.DestAccessUId);
+                    break;
+
+                case CallArgumentSidecar.ChainInputArgSidecar chain:
+                    BuildChainIntoPort(
+                        chain.RailWireUId, chain.Steps, sidecar.CallPartUId, chain.ParamName,
+                        timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+                    break;
+
+                case CallArgumentSidecar.InOutArgSidecar inOut:
+                    // Consumer order, as the real export writes an InOut: the tag, then the parameter.
+                    AddEndpoint(wireEndpointsByUId, inOut.WireUId, new WireEndpoint(EndpointKind.IdentCon, inOut.AccessUId, null));
+                    AddEndpoint(wireEndpointsByUId, inOut.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, inOut.ParamName));
                     break;
 
                 default:

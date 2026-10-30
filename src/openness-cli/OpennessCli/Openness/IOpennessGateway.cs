@@ -232,6 +232,13 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<string> ProbeExportAsDocuments(string typeName, string outDirectory);
 
     /// <summary>
+    /// Asks whether a library type version can be opened for editing and whether its CONTENT
+    /// (items, event handlers, scripts) is reachable. MUTATES the project when the version answers
+    /// an edit call (it creates an in-work version), then tries to discard it again.
+    /// </summary>
+    IReadOnlyList<string> ProbeEditLibraryType(string typeName, string? version, string? itemName);
+
+    /// <summary>
     /// Sets attributes on any object in any composition — the counterpart to
     /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the
     /// MultilingualText path (alarm texts and the like), which can only write into a language the
@@ -540,6 +547,23 @@ public interface IOpennessGateway : IDisposable
     /// this is a post-import property set rather than something folded into the import path.
     /// </summary>
     BlockLayoutResult SetBlockMemoryLayout(string blockName, string? deviceFilter, MemoryLayoutKind requested);
+
+    /// <summary>
+    /// READ-ONLY. Reports a cyclic-interrupt OB's cycle time and phase shift (milliseconds). Resolves
+    /// the block like <see cref="GetBlockMemoryLayout"/> (same disambiguation, same safety refusal)
+    /// and does not save.
+    ///
+    /// Exists because a V20 export carries no cycle time, so no other tool can see it. Throws
+    /// <see cref="ObCycleUnavailableException"/> when the block has no such attribute.
+    /// </summary>
+    ObCycleResult GetObCycle(string blockName, string? deviceFilter);
+
+    /// <summary>
+    /// Sets a cyclic-interrupt OB's cycle time (and, when given, its phase shift), saves, and READS
+    /// BOTH BACK from a freshly re-resolved block — the returned values are what the project holds
+    /// afterwards, never an echo of the request.
+    /// </summary>
+    ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs);
 
     /// <summary>
     /// READ-ONLY. Works out what a download of one PLC device would comprise, and reports it. Opens

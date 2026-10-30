@@ -86,4 +86,54 @@ public class FlgNetWriterPartOrderTests
 
         Assert.Equal(new[] { 30, 56, 52 }, partUIds);
     }
+
+    [Fact]
+    public void WithinOneRung_ReadyPartsGoLowestUIdFirst_NotDepthFirst()
+    {
+        // 2026-10-29, a live-run conveyor network: an O (10) feeds both a TON (20) and a Not (40);
+        // the TON's Q feeds a coil (30); the Not feeds a coil (50). One rung, written by TIA in UId order
+        // 10, 20, 30, 40, 50. The old depth-first walk followed the O's fan-out into the Not first when
+        // the wire listed it first, emitting 10, 40, 50, 20, 30 - the Not's coil ahead of the TON's.
+        var network = new FlgNetwork(
+            Array.Empty<AccessNode>(),
+            new[]
+            {
+                new PartNode(10, "O"),
+                new PartNode(20, "Ton"),
+                new PartNode(30, "Coil"),
+                new PartNode(40, "Not"),
+                new PartNode(50, "Coil"),
+            },
+            new[]
+            {
+                new WireNode(1, new[]
+                {
+                    new WireEndpoint(EndpointKind.Powerrail, null, null),
+                    new WireEndpoint(EndpointKind.NameCon, 10, "in1"),
+                }),
+                new WireNode(2, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, 10, "out"),
+                    new WireEndpoint(EndpointKind.NameCon, 40, "in"),
+                    new WireEndpoint(EndpointKind.NameCon, 20, "in"),
+                }),
+                new WireNode(3, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, 20, "Q"),
+                    new WireEndpoint(EndpointKind.NameCon, 30, "in"),
+                }),
+                new WireNode(4, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, 40, "out"),
+                    new WireEndpoint(EndpointKind.NameCon, 50, "in"),
+                }),
+            });
+
+        var partUIds = FlgNetWriter.Write(network).Elements().First(e => e.Name.LocalName == "Parts")
+            .Elements().Where(e => e.Name.LocalName == "Part")
+            .Select(e => int.Parse(e.Attribute("UId")!.Value))
+            .ToList();
+
+        Assert.Equal(new[] { 10, 20, 30, 40, 50 }, partUIds);
+    }
 }

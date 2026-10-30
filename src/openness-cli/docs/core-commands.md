@@ -669,6 +669,33 @@ output is not a TIA export** — it renders five block-level attributes and `Mem
 them, so grepping converter output for it finds nothing, and *nothing is evidence about the converter,
 not about the block*. An absent attribute is "unanswered", never "false".
 
+## `ob-cycle` — a cyclic OB's cycle time (2026-10-29)
+
+Read form: `ob-cycle <project> --block <name> [--expect <ms>] [--device <name>] [--json]`
+Set form: `ob-cycle <project> --block <name> --set <ms> [--phase <ms>] [--device <name>] [--json] --yes`
+
+A cyclic-interrupt OB's cycle time and phase shift, through Openness's dynamic attributes
+`CyclicTime` and `PhaseOffset`. The V20 assembly has no typed property for either. Same shape as
+`block-layout`: the set saves, re-resolves the block and reads both values back; a mismatch, or a
+failed `--expect`, is exit 15; an unconfirmed set is exit 10 before Portal is contacted. A block with
+no such attribute is exit 7, and the message lists every attribute the block *does* expose — that
+list is how the real name `PhaseOffset` (not `PhaseShift`) was found.
+
+All measured on a classic S7-1200 in TIA V20, 2026-10-29, with a probe OB on a scratch project:
+
+- **The unit is MILLISECONDS.** An OB that TIA's properties show as 100 ms reads back
+  `CyclicTime = 100`. Values are whole numbers with no unit suffix.
+- **A V20 export carries NEITHER value.** The probe was set to 250 ms with a 5 ms phase shift,
+  compiled and exported; the XML has `SecondaryType=CyclicInterrupt` and no cycle-time or phase
+  element at all. So the converter has nothing to read or write, `compare` cannot see a change, and
+  this command is the only check. It is not a converter gap: there is nothing in the file to lose.
+- **A new cyclic OB imports at the 100 ms default.** A converter-generated OB, which states no cycle
+  time, came in at 100 ms and phase 0.
+- **RE-IMPORTING AN EXISTING CYCLIC OB REVERTS IT TO THE DEFAULT.** The probe, set to 250 ms, was
+  re-imported from XML and read back 100 ms and phase 0 — silently, with exit 0. It is the same trap
+  as `block-layout`. **After every import of a cyclic OB, re-assert with `--set` if it is not 100 ms,
+  and gate with `--expect`.**
+
 ## `library` — the project-library walk (migrated from CLAUDE.md 2026-08-21)
 
 This command had no section here; what follows was its only documentation.
@@ -694,13 +721,42 @@ screen export — there is no document because the project never keeps one.
 
 **Exits 7 if nothing was written.**
 
-### `--probe-documents` — BUILT, NEVER RUN
+### `--probe-documents` — RUN 2026-10-30: nothing to call on a Unified faceplate type
 
 `library <project> --probe-documents <TypeName> --out <dir>`
 
 Invokes EVERY `Export*` overload including `ExportAsDocuments` **when the format list is EMPTY**,
-reporting each binding and outcome. That emptiness has been treated as a gate since P10 and never
-TESTED as one — **an empty ADVERTISEMENT is not a REFUSAL.** A throw here is a RESULT, not a bug.
+reporting each binding and outcome. A throw here is a RESULT, not a bug.
+
+**Measured (TIA V20 Update 5, a WinCC Unified faceplate type):** the plain `LibraryType` carries **no
+`Export*` method at all** besides `GetSupportedExportFormats()` (empty), so the probe reports no
+candidates and writes nothing. The document export lives on the **version** — see `--probe-edit`.
+
+### `--probe-edit` — can a library type version be edited, and is its content reachable? (2026-10-30)
+
+`library <project> --probe-edit <TypeName> [--version <v>] [--item <name>] --yes`
+
+**MUTATING** (`Edit()` creates an in-work version; the probe calls `Discard()` on it again and says
+whether that worked). Never saves the project. Scratch only. Reports every member of the type and
+version, the faceplate-related CLR types Openness loads, the version's `ExportAsDocuments` with a set
+of guessed formats, `Edit()`, and a bounded walk of both versions' object graphs to any item with
+`EventHandlers` (scripts printed for `--item`).
+
+**Measured on a WinCC Unified faceplate type (TIA V20 Update 5, Openness V20 Update 4):**
+
+| question | answer |
+|---|---|
+| `LibraryTypeVersion.Edit()` | **works** — returns a new version in state `InWork` (next version number) |
+| `LibraryTypeVersion.Discard()` | **works** — the in-work version is removed again |
+| `Release(CreateOrReleaseDependenciesMode, Version, String, String)` | exists (not called) |
+| content on the version (items, screen, event handlers) | **none** — the version's properties are metadata only (`TypeObject`, `Dependencies`, `Dependents`, `State`, …); the graph walk finds no object with `EventHandlers` |
+| a Unified faceplate *content* class in the loaded assemblies | **none** — only `HmiFaceplateContainer`/`HmiFaceplateInterface` (the instance side) and the CLASSIC `Hmi.Faceplate.FaceplateLibraryType[Version]` |
+| version `ExportAsDocuments(dir, name, exportFormat, options)` | empty format → refused ("Cannot export a version without specifying an export format or with an invalid export format"); `SimaticML`/`Yaml`/`Xml`/`Json`/`Unified` → **accepted, returns an `ExportTransferResult`, writes no file** |
+| version `Export(FileInfo, ExportOptions)` | writes a ~2.6 KB wrapper with no content object (as above) |
+
+**So a Unified faceplate type's scripts cannot be read or changed through Openness V20**: a version
+can be opened and discarded, but nothing inside it is exposed. A defect in a faceplate script is an
+engineer's edit in the TIA editor; tooling can only verify the result from the compiled runtime image.
 
 ### 🔴 THERE ARE THREE PLC COMPILE SCOPES, AND `compile` HAS ALWAYS USED THE ONE THAT COMPILES *HARDWARE* (2026-08-13)
 

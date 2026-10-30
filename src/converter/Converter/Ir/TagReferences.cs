@@ -128,6 +128,9 @@ public static class TagReferences
                     case CallArgument.OutputArg output:
                         yield return output.DestTag;
                         break;
+                    case CallArgument.InOutArg inOut:
+                        yield return inOut.Tag;
+                        break;
                 }
             }
         }
@@ -731,6 +734,11 @@ public static class TagReferences
                         break;
                     case CallArgument.OutputArg output:
                         yield return new DirectedTagUsage(output.DestTag, TagDirection.Write, Guard: call.En);
+                        break;
+                    case CallArgument.InOutArg inOut:
+                        // The callee may both read and write an InOut, so it is both.
+                        yield return new DirectedTagUsage(inOut.Tag, TagDirection.Read);
+                        yield return new DirectedTagUsage(inOut.Tag, TagDirection.Write, Guard: call.En);
                         break;
                 }
             }

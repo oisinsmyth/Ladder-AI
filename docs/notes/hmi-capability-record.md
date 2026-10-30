@@ -218,10 +218,10 @@ The "all attempted" rows are the useful ones: those refusal sets are **facts**, 
    route to faceplate type authoring.** Export and import are separate code paths; nothing requires
    both to exist. Two real worked examples of the wrapper schema are now in hand, one with a
    `ContentObject` (PLC) and one without (faceplate), from the same TIA version.
-2. **`library --probe-documents <T> --out <dir>` — BUILT, UNIT-TESTED, NEVER RUN.** It invokes every
-   `Export*` overload including `ExportAsDocuments` with an empty format list, and reports each
-   binding and outcome. Blocked only on an approved binary — see the FI-68 self-approve route, which
-   may remove that blocker entirely.
+2. **`library --probe-documents` / `--probe-edit` — RUN 2026-10-30, NEGATIVE for content.** A Unified
+   faceplate type version can be `Edit()`ed and `Discard()`ed, but exposes no items, event handlers
+   or scripts; its `ExportAsDocuments` accepts any non-empty format and writes nothing. Faceplate
+   type scripts are not reachable through Openness V20 (`src/openness-cli/docs/core-commands.md`).
 3. **`HmiCustomWebControlContainer` placement — code written, never run.** It requires the
    two-argument `Create<T>(name, containedType)` overload, which `openness-cli` now supports. Running
    it turns the Custom Web Control route from documentation into measured capability.

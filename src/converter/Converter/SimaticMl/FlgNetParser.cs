@@ -45,7 +45,8 @@ public static class FlgNetParser
     // FC PlantAutoControl (TomraControlSystem: 8 Input, 2 Output). InOut is real in principle (an FB's own
     // interface can declare InOut parameters) but unconfirmed on a Call specifically, refused
     // rather than guessed at.
-    private static readonly HashSet<string> SupportedCallParameterSections = new(StringComparer.Ordinal) { "Input", "Output" };
+    // "InOut" confirmed real 2026-10-29: an FB call passing a PID_Compact instance as its `PID` InOut.
+    private static readonly HashSet<string> SupportedCallParameterSections = new(StringComparer.Ordinal) { "Input", "Output", "InOut" };
 
     public static FlgNetwork Parse(XElement flgNet)
     {
@@ -870,7 +871,7 @@ public static class FlgNetParser
             if (!SupportedCallParameterSections.Contains(section))
             {
                 throw new UnsupportedConstructException(
-                    $"<Call UId=\"{uid}\">'s <Parameter Name=\"{paramName}\" Section=\"{section}\"> — only Input/Output have been observed.");
+                    $"<Call UId=\"{uid}\">'s <Parameter Name=\"{paramName}\" Section=\"{section}\"> — only Input/Output/InOut have been observed.");
             }
 
             var type = RequireAttribute(p, "Type");

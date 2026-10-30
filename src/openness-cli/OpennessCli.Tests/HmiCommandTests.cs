@@ -947,6 +947,46 @@ public class HmiCommandTests
         Assert.Null(ok.Options.OutDirectory);
     }
 
+    // --probe-edit calls Edit() on a library type, which creates an in-work version in the
+    // project. A mutation without --yes is refused, like every other mutating verb.
+    [Fact]
+    public void Library_ProbeEditWithoutYes_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--probe-edit", "SomeFaceplate" });
+
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("--yes", failure.Message);
+    }
+
+    [Fact]
+    public void Library_ProbeEditWithYes_CarriesTypeVersionAndItem()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--probe-edit", "SomeFaceplate", "--version", "0.0.17", "--item", "StartButton", "--yes" });
+
+        var ok = Assert.IsType<ParseResult.LibrarySuccess>(result);
+        Assert.Equal("SomeFaceplate", ok.Options.ProbeEditTypeName);
+        Assert.Equal("0.0.17", ok.Options.ExportVersion);
+        Assert.Equal("StartButton", ok.Options.ProbeItemName);
+        Assert.True(ok.Options.Confirm);
+    }
+
+    [Fact]
+    public void Library_ProbeEditWithOut_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--probe-edit", "T", "--out", "C:\\tmp", "--yes" });
+
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Library_ItemWithoutProbeEdit_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--item", "StartButton" });
+
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("--probe-edit", failure.Message);
+    }
+
     [Fact]
     public void SplitItemSpec_LeavesAnOrdinaryTypeAlone()
     {

@@ -808,6 +808,54 @@ public static class OutputFormatter
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
+    /// <summary>
+    /// An ob-cycle read or set — BEFORE / REQUESTED / AFTER kept apart on a set, as for block-layout.
+    /// </summary>
+    public static string FormatObCycleTable(ObCycleResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("BLOCK: ").Append(result.Name).Append("  (").Append(result.Path).Append(")\n");
+
+        if (!result.IsSet)
+        {
+            sb.Append("CYCLE TIME: ").Append(result.CyclicTimeMs).Append(" ms\n");
+            sb.Append("PHASE SHIFT: ").Append(result.PhaseShiftMs).Append(" ms\n");
+            return sb.ToString().TrimEnd('\n', '\r');
+        }
+
+        sb.Append("BEFORE: ").Append(result.PreviousCyclicTimeMs).Append(" ms, phase ").Append(result.PreviousPhaseShiftMs).Append(" ms\n");
+        sb.Append("REQUESTED: ").Append(result.RequestedCyclicTimeMs).Append(" ms, phase ")
+          .Append(result.RequestedPhaseShiftMs is { } p ? $"{p} ms" : "(unchanged)").Append('\n');
+        sb.Append("AFTER: ").Append(result.CyclicTimeMs).Append(" ms, phase ").Append(result.PhaseShiftMs).Append(" ms\n");
+        sb.Append(result.Verified
+            ? (result.Changed
+                ? "VERIFIED: saved, the block re-resolved from the project, and the values read back match the request.\n"
+                : "VERIFIED: the values read back match the request. They were already set - nothing changed.\n")
+            : "NOT APPLIED: the values read back after saving do not match the request.\n");
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatObCycleJson(ObCycleResult result)
+    {
+        var payload = new
+        {
+            name = result.Name,
+            path = result.Path,
+            cyclicTimeMs = result.CyclicTimeMs,
+            phaseShiftMs = result.PhaseShiftMs,
+            previousCyclicTimeMs = result.PreviousCyclicTimeMs,
+            previousPhaseShiftMs = result.PreviousPhaseShiftMs,
+            requestedCyclicTimeMs = result.RequestedCyclicTimeMs,
+            requestedPhaseShiftMs = result.RequestedPhaseShiftMs,
+            isSet = result.IsSet,
+            changed = result.Changed,
+            verified = result.Verified,
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatBlockLayoutJson(BlockLayoutResult result)
     {
         var payload = new
