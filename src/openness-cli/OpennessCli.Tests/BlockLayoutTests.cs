@@ -508,6 +508,28 @@ internal sealed class FakeGateway : IOpennessGateway
         return new ObCycleResult(blockName, "PLC_1", CyclicTimeMs, PhaseShiftMs, beforeCyclic, beforePhase, cyclicTimeMs, phaseShiftMs);
     }
 
+    // ---- rename -----------------------------------------------------------------------------
+
+    /// <summary>What the next <see cref="Rename"/> hands back; null means "not arranged" and throws.</summary>
+    public RenameResult? RenameOutcome { get; set; }
+
+    public int RenameCalls { get; private set; }
+
+    public (RenameTargetKind Kind, string Name, string? Device, string NewName)? LastRename { get; private set; }
+
+    public RenameResult Rename(RenameTargetKind kind, string name, string? deviceFilter, string newName)
+    {
+        RenameCalls++;
+        LastRename = (kind, name, deviceFilter, newName);
+        if (ThrowSafety)
+        {
+            throw new SafetyContentRefusedException(name, "F_LAD");
+        }
+
+        SaveCalls++;
+        return RenameOutcome ?? throw new InvalidOperationException("Test did not arrange a RenameOutcome.");
+    }
+
     // ---- download-plan ----------------------------------------------------------------------
     //
     // The counter below is the point of this whole section. Every download-plan test asserts it is
