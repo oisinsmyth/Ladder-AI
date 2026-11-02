@@ -696,6 +696,46 @@ All measured on a classic S7-1200 in TIA V20, 2026-10-29, with a probe OB on a s
   as `block-layout`. **After every import of a cyclic OB, re-assert with `--set` if it is not 100 ms,
   and gate with `--expect`.**
 
+## `rename` — one object's Name (2026-11-02)
+
+`rename <project> (--block | --type | --techobject | --hmitag | --hmialarm) <name> --to <newName> [--device <name>] [--json] --yes`
+
+Renames ONE object by setting its typed Openness `Name`: a program block (OB/FB/FC/DB, instance DBs
+included), a PLC data type, a technology object (`PlcSoftware.TechnologicalObjectGroup`, walked
+recursively — the first code in this CLI to enumerate TOs), a WinCC **Unified** HMI tag (any tag
+table, via `HmiSoftware.Tags`; a structure tag is renamed as a whole, members are not addressable), or a
+Unified discrete alarm. `--device` narrows to a PLC for the PLC kinds and picks the Unified device for
+the HMI kinds. Classic HMI is not supported.
+
+Same shape as `block-layout --set`: without `--yes` the plan is printed from the arguments alone and
+Portal is never contacted (exit 10) — so the plan cannot show the current number; a confirmed run
+reports it before and after. Refused before anything is set: safety blocks (exit 6); a name that is not
+found (exit 7, with the shared near-match diagnostic) or is ambiguous (exit 7, pass `--device`); a
+`--to` already used, compared **case-insensitively**, anywhere in the same PLC software (blocks, types
+and TOs together) or the same HMI device (tags + system tags; discrete + analog alarms) — deliberately
+wider than one composition, because whether TIA lets those share a name is not measured; empty,
+whitespace-edged, quoted or invisible-character names (exit 1). After setting it saves, re-walks the
+project and **re-resolves by the new name**: nothing answering to it, a different read-back, a changed
+block number / alarm ID, or the old name still resolving is exit 15. The setter throwing is exit 20,
+nothing saved.
+
+**Reflection over the V20 `Siemens.Engineering.dll` (2026-11-02):** `PlcBlock.Name`, `PlcType.Name`,
+`TechnologicalInstanceDB.Name` (re-declared, not inherited — so a TO is set through that type),
+`HmiUnified.HmiTags.HmiTag.Name` and `HmiUnified.HmiAlarm.HmiDiscreteAlarm.Name` all have a **public
+setter**. A setter in the metadata is not proof TIA accepts a value at runtime; that is what exit 20 is
+for.
+
+**NOT YET MEASURED AGAINST TIA** — run it on a scratch copy before relying on any of this:
+
+- whether callers' references follow the rename (CALLs, instance-DB `InstanceOfName`, symbolic
+  accesses such as `"DB_Old".Member`, UDT usages) — the command does not check; `sanity-check` will;
+- whether the block number is kept (the command fails closed with exit 15 if it is not);
+- technology-object renames at all, and what the TO's instance-DB number does;
+- whether Unified screen dynamizations, scripts (which name tags **by string**) and alarm triggers
+  (`RaisedStateTag`, also a string) follow an HMI tag or alarm rename — very possibly not; run
+  `hmi-compile` and read the scripts;
+- whether TIA really treats two names differing only in case as a collision.
+
 ## `library` — the project-library walk (migrated from CLAUDE.md 2026-08-21)
 
 This command had no section here; what follows was its only documentation.

@@ -566,6 +566,22 @@ public interface IOpennessGateway : IDisposable
     ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs);
 
     /// <summary>
+    /// Renames one object by setting its Openness <c>Name</c>, saves, then RE-RESOLVES IT BY THE NEW
+    /// NAME and reads the name and number (block number / alarm ID) back — the returned "after"
+    /// values are what the project holds, never an echo of the request.
+    ///
+    /// Refuses, before anything is set: safety content (<see cref="SafetyContentRefusedException"/>);
+    /// a name that does not resolve or resolves twice (<see cref="RenameSourceNotFoundException"/> /
+    /// <see cref="AmbiguousRenameSourceException"/>); a new name already used in the same composition
+    /// (<see cref="RenameTargetExistsException"/>). A setter that throws is
+    /// <see cref="RenameRefusedException"/>, and nothing is saved.
+    ///
+    /// Does NOT examine references to the object. Whether TIA updates callers, instance-DB links,
+    /// HMI dynamizations, scripts and alarm triggers on its own is not measured; verify with a compile.
+    /// </summary>
+    RenameResult Rename(RenameTargetKind kind, string name, string? deviceFilter, string newName);
+
+    /// <summary>
     /// READ-ONLY. Works out what a download of one PLC device would comprise, and reports it. Opens
     /// no socket, transfers nothing, and changes nothing in the project.
     ///

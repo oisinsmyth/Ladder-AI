@@ -113,6 +113,12 @@ internal static class Program
                 return RefuseUnconfirmedObCycle(unconfirmedCycle.Options);
             }
 
+            // Same seam for `rename`: it has no read form, so ANY unconfirmed rename is refused here.
+            if (parseResult is ParseResult.RenameSuccess { Options.Confirm: false } unconfirmedRename)
+            {
+                return RefuseUnconfirmedRename(unconfirmedRename.Options);
+            }
+
             if (parseResult is ParseResult.HmiNewSuccess { Options.Confirm: false } unconfirmedNew)
             {
                 Console.Error.WriteLine(
@@ -217,6 +223,8 @@ internal static class Program
                     return RunBlockLayout(gateway, blockLayout.Options, timeoutOpenSeconds);
                 case ParseResult.ObCycleSuccess obCycle:
                     return RunObCycle(gateway, obCycle.Options, timeoutOpenSeconds);
+                case ParseResult.RenameSuccess rename:
+                    return RunRename(gateway, rename.Options, timeoutOpenSeconds);
                 case ParseResult.DownloadPlanSuccess downloadPlan:
                     return RunDownloadPlan(gateway, downloadPlan.Options, timeoutOpenSeconds);
                 case ParseResult.HardwareIdentifierSuccess hwIdentifiers:
@@ -1561,6 +1569,65 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    internal static int RefuseUnconfirmedRename(RenameCommandOptions options)
+    {
+        Console.Error.WriteLine(
+            $"Would rename {Model.RenameRules.Label(options.Kind)} '{options.Name}' to '{options.NewName}'" +
+            (options.Device is { } d ? $" (device filter '{d}')" : string.Empty) +
+            $" in project '{options.ProjectIdentifier}'.");
+        Console.Error.WriteLine(
+            "Its current " + (Model.RenameRules.NumberLabel(options.Kind) ?? "location") +
+            " is not shown: answering it needs a Portal session, and this refusal deliberately has none. " +
+            "A confirmed run reports it before and after.");
+        Console.Error.WriteLine(OutputFormatter.RenameReferencesNotChecked);
+        Console.Error.WriteLine(
+            "Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    /// <summary>
+    /// `rename` — set one object's Name, save, and prove it by re-resolving BY THE NEW NAME.
+    /// <c>internal</c> so the verify decisions are testable against a fake gateway, like
+    /// <see cref="RunObCycle"/>. Gated on THIS invocation's own <c>--to</c>, not on the name the result
+    /// reports having been asked for, so a result that misreports its request still fails closed.
+    /// </summary>
+    internal static int RunRename(IOpennessGateway gateway, RenameCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        var result = gateway.Rename(options.Kind, options.Name, options.Device, options.NewName);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatRenameJson(result)
+            : OutputFormatter.FormatRenameTable(result));
+
+        var problems = new List<string>();
+        if (!string.Equals(result.NameAfter, options.NewName, StringComparison.Ordinal))
+        {
+            problems.Add(result.NameAfter is null
+                ? $"nothing answers to '{options.NewName}' after saving"
+                : $"the object found by the new name reads back as '{result.NameAfter}'");
+        }
+
+        if (result.NumberBefore != result.NumberAfter)
+        {
+            problems.Add($"its {result.NumberLabel ?? "number"} went from {result.NumberBefore?.ToString() ?? "(none)"} to {result.NumberAfter?.ToString() ?? "(unread)"}");
+        }
+
+        if (result.OldNameStillPresent)
+        {
+            problems.Add($"'{options.Name}' still resolves");
+        }
+
+        if (problems.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"RENAME NOT APPLIED: asked to rename '{options.Name}' to '{options.NewName}', but " + string.Join("; ", problems) + ".");
+            return ExitCodes.LayoutMismatch;
+        }
+
+        return ExitCodes.Success;
+    }
+
     /// <summary>
     /// `download-plan` — report what a download WOULD comprise. It cannot download.
     ///
@@ -1919,6 +1986,19 @@ public static class ExitCodes
     public const int DuplicateBlockNumber = 19;
 
     /// <summary>
+    /// `rename`: Openness REFUSED to set the name — the typed <c>Name</c> setter threw (2026-11-02).
+    /// Nothing was saved by the command.
+    ///
+    /// Its own code because the caller's response differs from every neighbour's: not
+    /// <see cref="CommandError"/> (nothing was named wrongly — the object resolved and the new name
+    /// passed every check this tool can make), not <see cref="UnexpectedError"/> (a setter refusing
+    /// is a modelled outcome, and its message carries TIA's own reason), and not
+    /// <see cref="LayoutMismatch"/> (that means the set APPEARED to succeed and the read-back
+    /// disagreed). The recovery is a person renaming it in TIA Portal, or a different name.
+    /// </summary>
+    public const int RenameRefused = 20;
+
+    /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).
     ///
     /// CommandError (7) means "you named something that isn't there, or named it ambiguously" — the
@@ -1975,6 +2055,13 @@ public static class ExitCodes
         // defect again.
         Model.BlockMemoryLayoutUnavailableException => CommandError,
         Model.ObCycleUnavailableException => CommandError,
+
+        // `rename` (2026-11-02): a name not found / ambiguous / already taken is the caller's to fix;
+        // Openness refusing the setter is its own modelled outcome (see RenameRefused).
+        Model.RenameSourceNotFoundException => CommandError,
+        Model.AmbiguousRenameSourceException => CommandError,
+        Model.RenameTargetExistsException => CommandError,
+        Model.RenameRefusedException => RenameRefused,
 
         // The HMI family, added 2026-08-08. Every one of these was falling through to
         // UnexpectedError = 5 and printing a full inner-exception chain, even though each is a

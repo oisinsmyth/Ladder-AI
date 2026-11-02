@@ -125,6 +125,11 @@ public class PreConnectRefusalRoutingTests
     [InlineData("hmi-new", "--kind", "screen", "--name", "Screen_1")]
     [InlineData("hmi-delete", "--kind", "screen", "--name", "Screen_1")]
     [InlineData("hmi-create-tag", "--name", "Tag_1", "--table", "Tags", "--datatype", "Bool")]
+    [InlineData("rename", "--block", "FB_Old", "--to", "FB_New")]
+    [InlineData("rename", "--type", "UDT_Old", "--to", "UDT_New")]
+    [InlineData("rename", "--techobject", "PID_Old", "--to", "PID_New")]
+    [InlineData("rename", "--hmitag", "Tag_Old", "--to", "Tag_New", "--device", "HMI_1")]
+    [InlineData("rename", "--hmialarm", "Alarm_Old", "--to", "Alarm_New")]
     public void EveryUnconfirmedWrite_NeverReachesConnect(string subcommand, params string[] rest)
     {
         var args = new List<string> { subcommand, @"C:\proj\My.ap20" };
@@ -139,5 +144,36 @@ public class PreConnectRefusalRoutingTests
         // gate would never have been asked. Pinning 10 keeps this case from silently degrading into
         // a test of the argument parser.
         Assert.Equal(ExitCodes.NotConfirmed, exit);
+    }
+
+    /// <summary>
+    /// `rename`'s control: WITH --yes it must reach the gateway's Rename — otherwise the case above
+    /// passing says nothing about where the gate sits.
+    /// </summary>
+    [Fact]
+    public void RenameWithYes_IsNotRefused_AndDoesReachRename()
+    {
+        var gateway = new FakeGateway
+        {
+            RenameOutcome = new RenameResult(RenameTargetKind.Block, "PLC_1", "FB_Old", "FB_New", "FB_New", 3, 3, false),
+        };
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+        int exit;
+        try
+        {
+            Console.SetOut(new StringWriter());
+            Console.SetError(new StringWriter());
+            exit = Program.Run(new[] { "rename", @"C:\proj\My.ap20", "--block", "FB_Old", "--to", "FB_New", "--yes" }, () => gateway);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetError(originalError);
+        }
+
+        Assert.Equal(ExitCodes.Success, exit);
+        Assert.Equal(1, gateway.ConnectCalls);
+        Assert.Equal(1, gateway.RenameCalls);
     }
 }

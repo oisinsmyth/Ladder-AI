@@ -6482,6 +6482,318 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // ---- rename ---------------------------------------------------------------------------------
+    //
+    // Every kind is renamed through its TYPED Name setter, cast to the most-derived type that declares
+    // it: reflecting on the V20 assembly (2026-11-02) shows PlcBlock, PlcType, TechnologicalInstanceDB,
+    // HmiTag and HmiDiscreteAlarm each with a public `Name { get; set; }`, and
+    // TechnologicalInstanceDB re-declares its own rather than inheriting PlcBlock's - so a TO is set
+    // as a TechnologicalInstanceDB, never through a PlcBlock reference. NOT MEASURED against TIA.
+
+    public RenameResult Rename(RenameTargetKind kind, string name, string? deviceFilter, string newName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(Rename)}.");
+        }
+
+        return kind switch
+        {
+            RenameTargetKind.Block or RenameTargetKind.Type or RenameTargetKind.TechnologicalObject =>
+                RenamePlcObject(kind, name, deviceFilter, newName),
+            RenameTargetKind.HmiTag or RenameTargetKind.HmiAlarm => RenameHmiObject(kind, name, deviceFilter, newName),
+            _ => throw new InvalidOperationException($"Unrecognized {nameof(RenameTargetKind)} value '{kind}'."),
+        };
+    }
+
+    // One renameable PLC object: the Openness object, its own kind, where it is, and which PLC software
+    // holds it (the collision scope).
+    private sealed record PlcNamedObject(RenameTargetKind Kind, object Item, string Name, string Path, PlcSoftware Software);
+
+    private RenameResult RenamePlcObject(RenameTargetKind kind, string name, string? deviceFilter, string newName)
+    {
+        var all = CollectPlcNamedObjects();
+        var target = ResolveOnePlcNamedObject(all, kind, name, deviceFilter);
+
+        if (target.Item is PlcBlock block)
+        {
+            var language = block.ProgrammingLanguage.ToString();
+            if (SafetyClassifier.IsSafety(language))
+            {
+                throw new SafetyContentRefusedException(name, language);
+            }
+        }
+
+        // The collision scope is the WHOLE PLC software, across blocks, types and technology objects,
+        // not only the renamed object's own composition: whether TIA lets a block share a name with a
+        // UDT or a TO is not measured, so the conservative answer is to refuse. A TO is an instance DB
+        // and so certainly shares the block namespace.
+        var existing = all
+            .Where(o => ReferenceEquals(o.Software, target.Software) || o.Software.Equals(target.Software))
+            .Where(o => !o.Item.Equals(target.Item))
+            .Select(o => new ExistingName(o.Name, $"{RenameRules.Label(o.Kind)} at {o.Path}"));
+        var collisions = RenameRules.FindCollisions(newName, existing);
+        if (collisions.Count > 0)
+        {
+            throw new RenameTargetExistsException(kind, name, newName, collisions);
+        }
+
+        var numberBefore = ReadPlcNumber(target.Item);
+        SetNameOrRefuse(kind, target.Item, name, newName);
+        SaveProject();
+
+        // Re-resolve from a FRESH walk, by the NEW name, so a cached object cannot answer the question.
+        var after = CollectPlcNamedObjects();
+        var byNewName = NarrowToDeviceQuietly(after.Where(o => o.Kind == kind && o.Name == newName).ToList(), deviceFilter, o => o.Path);
+        if (byNewName.Count > 1)
+        {
+            byNewName = byNewName.Where(o => o.Path == target.Path).ToList();
+        }
+
+        var reread = byNewName.Count == 1 ? byNewName[0] : null;
+        var oldStillPresent = NarrowToDeviceQuietly(after.Where(o => o.Kind == kind && o.Name == name).ToList(), deviceFilter, o => o.Path)
+            .Any(o => o.Path == target.Path);
+
+        return new RenameResult(
+            kind,
+            reread?.Path ?? target.Path,
+            name,
+            newName,
+            reread is null ? null : ReadName(reread.Item),
+            numberBefore,
+            reread is null ? null : ReadPlcNumber(reread.Item),
+            oldStillPresent);
+    }
+
+    private PlcNamedObject ResolveOnePlcNamedObject(List<PlcNamedObject> all, RenameTargetKind kind, string name, string? deviceFilter)
+    {
+        var ofKind = all.Where(o => o.Kind == kind).ToList();
+        var matches = NarrowToDevice(ofKind.Where(o => o.Name == name).ToList(), deviceFilter, o => o.Path);
+
+        return matches.Count switch
+        {
+            0 => throw new RenameSourceNotFoundException(kind, name, ofKind.Select(o => o.Name).ToList()),
+            1 => matches[0],
+            _ => throw new AmbiguousRenameSourceException(kind, name, matches.Select(m => m.Path)),
+        };
+    }
+
+    private List<PlcNamedObject> CollectPlcNamedObjects()
+    {
+        var all = new List<PlcNamedObject>();
+        foreach (var (item, path) in FindPlcDeviceItems(_project!))
+        {
+            if (item.GetService<SoftwareContainer>()?.Software is not PlcSoftware software)
+            {
+                continue;
+            }
+
+            CollectNamedBlocks(software.BlockGroup, path, software, all);
+
+            foreach (var (type, typePath) in FindTypesInGroup(software.TypeGroup, path, typeName: null))
+            {
+                all.Add(new PlcNamedObject(RenameTargetKind.Type, type, type.Name, typePath, software));
+            }
+
+            // First enumeration of technology objects anywhere in this gateway. The group shape
+            // (TechnologicalObjects + Groups, recursive) is from reflection on the V20 assembly.
+            CollectNamedTechnologicalObjects(software.TechnologicalObjectGroup, $"{path}/Technology objects", software, all);
+        }
+
+        return all;
+    }
+
+    private static void CollectNamedBlocks(PlcBlockGroup group, string groupPath, PlcSoftware software, List<PlcNamedObject> found)
+    {
+        foreach (PlcBlock block in group.Blocks)
+        {
+            found.Add(new PlcNamedObject(RenameTargetKind.Block, block, block.Name, groupPath, software));
+        }
+
+        foreach (PlcBlockUserGroup subGroup in group.Groups)
+        {
+            CollectNamedBlocks(subGroup, $"{groupPath}/{subGroup.Name}", software, found);
+        }
+    }
+
+    private static void CollectNamedTechnologicalObjects(
+        Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDBGroup? group,
+        string groupPath,
+        PlcSoftware software,
+        List<PlcNamedObject> found)
+    {
+        if (group is null)
+        {
+            return;
+        }
+
+        foreach (Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDB to in group.TechnologicalObjects)
+        {
+            found.Add(new PlcNamedObject(RenameTargetKind.TechnologicalObject, to, to.Name, groupPath, software));
+        }
+
+        foreach (Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDBUserGroup subGroup in group.Groups)
+        {
+            CollectNamedTechnologicalObjects(subGroup, $"{groupPath}/{subGroup.Name}", software, found);
+        }
+    }
+
+    // The setter is chosen BEFORE the try, so only a throw from Openness itself becomes a
+    // RenameRefusedException (exit 20); an object type this code does not know stays an internal fault.
+    private static void SetNameOrRefuse(RenameTargetKind kind, object item, string oldName, string newName)
+    {
+        Action set = item switch
+        {
+            Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDB to => () => to.Name = newName,
+            PlcBlock b => () => b.Name = newName,
+            PlcType t => () => t.Name = newName,
+            Siemens.Engineering.HmiUnified.HmiTags.HmiTag tag => () => tag.Name = newName,
+            Siemens.Engineering.HmiUnified.HmiAlarm.HmiDiscreteAlarm alarm => () => alarm.Name = newName,
+            _ => throw new InvalidOperationException($"Unrecognized renameable object type '{item.GetType().FullName}'."),
+        };
+
+        try
+        {
+            set();
+        }
+        catch (Exception ex)
+        {
+            throw new RenameRefusedException(kind, oldName, newName, ex);
+        }
+    }
+
+    private static int? ReadPlcNumber(object item) => item switch
+    {
+        Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDB to => to.Number,
+        PlcBlock b => b.Number,
+        _ => null,
+    };
+
+    private static string ReadName(object item) => item switch
+    {
+        Siemens.Engineering.SW.TechnologicalObjects.TechnologicalInstanceDB to => to.Name,
+        PlcBlock b => b.Name,
+        PlcType t => t.Name,
+        Siemens.Engineering.HmiUnified.HmiTags.HmiTag tag => tag.Name,
+        Siemens.Engineering.HmiUnified.HmiAlarm.HmiDiscreteAlarm alarm => alarm.Name,
+        _ => throw new InvalidOperationException($"Unrecognized renameable object type '{item.GetType().FullName}'."),
+    };
+
+    // One renameable Unified HMI object. Path is the device path, plus the tag table for a tag.
+    private sealed record HmiNamedObject(object Item, string Name, string Path);
+
+    private RenameResult RenameHmiObject(RenameTargetKind kind, string name, string? deviceFilter, string newName)
+    {
+        var (software, devicePath) = ResolveOneUnifiedSoftware(deviceFilter, kind);
+        var objects = CollectHmiNamedObjects(software, devicePath, kind);
+        var matches = objects.Where(o => o.Name == name).ToList();
+
+        var target = matches.Count switch
+        {
+            0 => throw new RenameSourceNotFoundException(kind, name, objects.Select(o => o.Name).ToList()),
+            1 => matches[0],
+            _ => throw new AmbiguousRenameSourceException(kind, name, matches.Select(m => m.Path)),
+        };
+
+        // Collision scope: every tag (plus system tags) for a tag; discrete AND analog alarms for an
+        // alarm - whether the two alarm kinds share a namespace is not measured, so refuse.
+        var existing = objects
+            .Where(o => !o.Item.Equals(target.Item))
+            .Select(o => new ExistingName(o.Name, $"{RenameRules.Label(kind)} at {o.Path}"))
+            .Concat(ExtraHmiNames(software, devicePath, kind));
+        var collisions = RenameRules.FindCollisions(newName, existing);
+        if (collisions.Count > 0)
+        {
+            throw new RenameTargetExistsException(kind, name, newName, collisions);
+        }
+
+        var numberBefore = target.Item is Siemens.Engineering.HmiUnified.HmiAlarm.HmiDiscreteAlarm a ? (int?)a.Id : null;
+        SetNameOrRefuse(kind, target.Item, name, newName);
+        SaveProject();
+
+        var (freshSoftware, freshPath) = ResolveOneUnifiedSoftware(deviceFilter, kind);
+        var after = CollectHmiNamedObjects(freshSoftware, freshPath, kind);
+        var byNewName = after.Where(o => o.Name == newName).ToList();
+        var reread = byNewName.Count == 1 ? byNewName[0] : null;
+
+        return new RenameResult(
+            kind,
+            reread?.Path ?? target.Path,
+            name,
+            newName,
+            reread is null ? null : ReadName(reread.Item),
+            numberBefore,
+            reread?.Item is Siemens.Engineering.HmiUnified.HmiAlarm.HmiDiscreteAlarm ra ? (int?)ra.Id : null,
+            after.Any(o => o.Name == name));
+    }
+
+    // Like FindSingleUnifiedSoftware, but narrowed by --device the way the PLC commands narrow.
+    private (HmiSoftware Software, string Path) ResolveOneUnifiedSoftware(string? deviceFilter, RenameTargetKind kind)
+    {
+        var unified = NarrowToDevice(CollectHmiDevices().Unified, deviceFilter, u => u.Path);
+        return unified.Count switch
+        {
+            0 => throw new NoUnifiedHmiDeviceException($"Renaming an {RenameRules.Label(kind)}"),
+            1 => unified[0],
+            _ => throw new AmbiguousHmiDeviceException(unified.Select(u => u.Path).ToList()),
+        };
+    }
+
+    private static List<HmiNamedObject> CollectHmiNamedObjects(HmiSoftware software, string devicePath, RenameTargetKind kind)
+    {
+        var found = new List<HmiNamedObject>();
+        if (kind == RenameTargetKind.HmiTag)
+        {
+            // HmiSoftware.Tags spans every tag table (hmi-create-tag relies on the same: it checks
+            // uniqueness through software.Tags.Find). A structure tag is one HmiTag whose members hang
+            // off .Members; only the top-level tag is renameable here.
+            foreach (Siemens.Engineering.HmiUnified.HmiTags.HmiTag tag in software.Tags)
+            {
+                found.Add(new HmiNamedObject(tag, tag.Name, $"{devicePath}/{TryReadObject(() => tag.TagTableName) ?? "(table unknown)"}"));
+            }
+        }
+        else
+        {
+            foreach (Siemens.Engineering.HmiUnified.HmiAlarm.HmiDiscreteAlarm alarm in software.DiscreteAlarms)
+            {
+                found.Add(new HmiNamedObject(alarm, alarm.Name, devicePath));
+            }
+        }
+
+        return found;
+    }
+
+    private static IEnumerable<ExistingName> ExtraHmiNames(HmiSoftware software, string devicePath, RenameTargetKind kind)
+    {
+        var extra = new List<ExistingName>();
+        try
+        {
+            if (kind == RenameTargetKind.HmiTag)
+            {
+                foreach (Siemens.Engineering.HmiUnified.HmiTags.HmiSystemTag systemTag in software.SystemTags)
+                {
+                    extra.Add(new ExistingName(systemTag.Name, $"system tag at {devicePath}"));
+                }
+            }
+            else
+            {
+                foreach (Siemens.Engineering.HmiUnified.HmiAlarm.HmiAnalogAlarm analog in software.AnalogAlarms)
+                {
+                    extra.Add(new ExistingName(analog.Name, $"analog alarm at {devicePath}"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // A collision scope that could not be read is not an empty one. Refuse rather than
+            // proceed on a check that examined nothing.
+            throw new InvalidOperationException(
+                $"Could not read the {(kind == RenameTargetKind.HmiTag ? "system tags" : "analog alarms")} of '{devicePath}' to check the new name against them: {ex.Message}", ex);
+        }
+
+        return extra;
+    }
+
     // The resolve-then-refuse-safety preamble that ExportBlock/DeleteBlock/CompileBlock each spell
     // out inline. New code goes through here rather than adding a fourth copy; the three older sites
     // are left as they are, since changing their resolution path is not something this branch can

@@ -176,6 +176,21 @@ public sealed record ObCycleCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// `rename`: one block / UDT / technology object / Unified HMI tag / Unified discrete alarm gets a new
+// Name. Same --yes shape as `block-layout --set`: without --yes the plan is printed from the arguments
+// alone and Portal is never contacted (exit 10). Kind is which selector flag was given — exactly one.
+public sealed record RenameCommandOptions(
+    string ProjectIdentifier,
+    Model.RenameTargetKind Kind,
+    string Name,
+    string NewName,
+    string? Device,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // `download-plan`. READ-ONLY AND DRY-RUN ONLY: it reports what a download WOULD comprise and cannot
 // perform one. Note what this record does NOT have — there is no Confirm, because there is no
 // confirmed form. `--yes` is not a flag on this command at all: a gate implies a door behind it, and
@@ -436,6 +451,8 @@ public abstract record ParseResult
 
     public sealed record ObCycleSuccess(ObCycleCommandOptions Options) : ParseResult;
 
+    public sealed record RenameSuccess(RenameCommandOptions Options) : ParseResult;
+
     public sealed record DownloadPlanSuccess(DownloadPlanCommandOptions Options) : ParseResult;
 
     public sealed record HardwareIdentifierSuccess(HardwareIdentifierCommandOptions Options) : ParseResult;
@@ -569,6 +586,13 @@ public static class ArgumentParser
         "  openness-cli ob-cycle      <project> --block <name> --set <ms> [--phase <ms>] [--device <name>] [--json] --yes\n" +
         "    Sets the cycle time (and phase shift), saves, RE-RESOLVES the block and reads both back: a mismatch is exit 15. Without --yes nothing is changed and Portal\n" +
         "    is never contacted (exit 10).\n" +
+        "  openness-cli rename        <project> (--block <name> | --type <name> | --techobject <name> | --hmitag <name> | --hmialarm <name>) --to <newName> [--device <name>] [--json] --yes\n" +
+        "    Renames ONE object by setting its Openness Name: a program block (OB/FB/FC/DB, instance DBs included), a PLC data type, a technology object, or a WinCC UNIFIED\n" +
+        "    HMI tag / discrete alarm. --device narrows to a PLC (PLC kinds) or picks the Unified HMI device (HMI kinds). Refuses safety blocks (exit 6), a name that is not\n" +
+        "    found or is ambiguous (exit 7, near matches named), and a --to already used in the same PLC software / HMI device, compared case-insensitively (exit 7).\n" +
+        "    Sets, saves, RE-RESOLVES BY THE NEW NAME and reads name and number (block number / alarm ID) back: a mismatch, a changed number, or the old name still\n" +
+        "    present is exit 15. Openness refusing the set is exit 20. Without --yes nothing is changed and Portal is never contacted (exit 10).\n" +
+        "    CALLERS AND REFERENCES ARE NOT CHECKED: whether TIA re-points calls, instance DBs, HMI dynamizations, scripts and alarm triggers is NOT MEASURED - compile.\n" +
         "  openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]\n" +
         "  openness-cli hw-identifiers <project> [--device <name>] [--all] [--json]\n" +
         "    --all shows EVERY attribute, not only identifier-named ones: the name filter is a guess,\n" +
@@ -698,6 +722,7 @@ public static class ArgumentParser
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.BlockLayoutSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.ObCycleSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.RenameSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DownloadPlanSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HardwareIdentifierSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -739,6 +764,7 @@ public static class ArgumentParser
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.BlockLayoutSuccess s => s.Options.ProjectIdentifier,
         ParseResult.ObCycleSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.RenameSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DownloadPlanSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HardwareIdentifierSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
@@ -785,6 +811,7 @@ public static class ArgumentParser
             "delete" => ParseDelete(args),
             "block-layout" => ParseBlockLayout(args),
             "ob-cycle" => ParseObCycle(args),
+            "rename" => ParseRename(args),
             "download-plan" => ParseDownloadPlan(args),
             "hw-identifiers" => ParseHardwareIdentifiers(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
@@ -813,7 +840,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, ob-cycle, download-plan, hw-identifiers, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, ob-cycle, rename, download-plan, hw-identifiers, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1966,6 +1993,145 @@ public static class ArgumentParser
 
         return new ParseResult.ObCycleSuccess(new ObCycleCommandOptions(
             projectIdentifier, block, device, set, phase, expect, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static readonly IReadOnlyDictionary<string, Model.RenameTargetKind> RenameSelectors =
+        new Dictionary<string, Model.RenameTargetKind>(StringComparer.Ordinal)
+        {
+            ["--block"] = Model.RenameTargetKind.Block,
+            ["--type"] = Model.RenameTargetKind.Type,
+            ["--techobject"] = Model.RenameTargetKind.TechnologicalObject,
+            ["--hmitag"] = Model.RenameTargetKind.HmiTag,
+            ["--hmialarm"] = Model.RenameTargetKind.HmiAlarm,
+        };
+
+    private static ParseResult ParseRename(string[] args)
+    {
+        string? projectIdentifier = null;
+        Model.RenameTargetKind? kind = null;
+        string? selectorFlag = null;
+        string? name = null;
+        string? newName = null;
+        string? device = null;
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (RenameSelectors.TryGetValue(args[i], out var selected))
+            {
+                // Exactly one selector. A second one - even the same flag twice - is refused rather than
+                // last-one-wins: a rename that acts on the "other" name is not recoverable by re-reading.
+                if (selectorFlag is not null)
+                {
+                    return new ParseResult.Failure(
+                        $"{selectorFlag} and {args[i]} given together: rename takes exactly ONE of --block, --type, --techobject, --hmitag, --hmialarm.{Environment.NewLine}{Usage}");
+                }
+
+                selectorFlag = args[i];
+                if (!TryTakeValue(args, ref i, selectorFlag, out name, out var nameErr))
+                {
+                    return new ParseResult.Failure(nameErr);
+                }
+
+                kind = selected;
+                continue;
+            }
+
+            switch (args[i])
+            {
+                case "--to":
+                    if (newName is not null)
+                    {
+                        return new ParseResult.Failure($"--to given more than once.{Environment.NewLine}{Usage}");
+                    }
+
+                    if (!TryTakeValue(args, ref i, "--to", out newName, out var toErr))
+                    {
+                        return new ParseResult.Failure(toErr);
+                    }
+
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (kind is not { } targetKind || name is null)
+        {
+            return new ParseResult.Failure(
+                $"Missing what to rename: give exactly one of --block, --type, --techobject, --hmitag, --hmialarm.{Environment.NewLine}{Usage}");
+        }
+
+        if (name.Length == 0)
+        {
+            return new ParseResult.Failure($"{selectorFlag} needs a non-empty name.{Environment.NewLine}{Usage}");
+        }
+
+        if (newName is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --to <newName>.{Environment.NewLine}{Usage}");
+        }
+
+        if (Model.RenameRules.ValidateNewName(newName) is { } invalid)
+        {
+            return new ParseResult.Failure($"Invalid --to '{newName}': {invalid}{Environment.NewLine}{Usage}");
+        }
+
+        if (string.Equals(name, newName, StringComparison.Ordinal))
+        {
+            return new ParseResult.Failure($"--to '{newName}' is the current name: there is nothing to rename.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.RenameSuccess(new RenameCommandOptions(
+            projectIdentifier, targetKind, name, newName, device, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     /// <summary>

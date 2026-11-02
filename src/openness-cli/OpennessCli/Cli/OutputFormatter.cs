@@ -836,6 +836,80 @@ public static class OutputFormatter
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
+    /// <summary>
+    /// What <c>rename</c> says on every confirmed run, pass or fail: it changes one name and looks at
+    /// nothing that refers to it.
+    /// </summary>
+    public const string RenameReferencesNotChecked =
+        "REFERENCES NOT CHECKED: this command does not examine callers, instance DBs, HMI dynamizations, scripts or alarm triggers. " +
+        "Whether TIA re-points them itself is NOT MEASURED - verify with `openness-cli sanity-check` (and `hmi-compile` for an HMI rename).";
+
+    /// <summary>A confirmed rename — BEFORE / REQUESTED / AFTER kept apart, as for block-layout.</summary>
+    public static string FormatRenameTable(RenameResult result)
+    {
+        static string Number(string? label, int? value) =>
+            label is null ? string.Empty : $"  ({label} {(value is { } v ? v.ToString(CultureInfo.InvariantCulture) : "unread")})";
+
+        var sb = new StringBuilder();
+        sb.Append("RENAME: ").Append(RenameRules.Label(result.Kind)).Append("  (").Append(result.Path).Append(")\n");
+        sb.Append("BEFORE: '").Append(result.OldName).Append('\'').Append(Number(result.NumberLabel, result.NumberBefore)).Append('\n');
+        sb.Append("REQUESTED: '").Append(result.RequestedName).Append("'\n");
+        sb.Append("AFTER: ")
+          .Append(result.NameAfter is null ? "(nothing answers to the new name)" : $"'{result.NameAfter}'")
+          .Append(result.NameAfter is null ? string.Empty : Number(result.NumberLabel, result.NumberAfter)).Append('\n');
+
+        if (result.Verified)
+        {
+            sb.Append("VERIFIED: saved, re-resolved BY THE NEW NAME, the name reads back as requested")
+              .Append(result.NumberLabel is null ? "" : $" and the {result.NumberLabel} is unchanged")
+              .Append(", and the old name no longer resolves.\n");
+        }
+        else
+        {
+            sb.Append("NOT APPLIED:");
+            if (!result.NameMatches)
+            {
+                sb.Append(" the new name does not read back as requested;");
+            }
+
+            if (result.NameAfter is not null && result.NumberChanged)
+            {
+                sb.Append($" the {result.NumberLabel} CHANGED;");
+            }
+
+            if (result.OldNameStillPresent)
+            {
+                sb.Append(" the old name STILL resolves;");
+            }
+
+            sb.Length--;
+            sb.Append(".\n");
+        }
+
+        sb.Append(RenameReferencesNotChecked).Append('\n');
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatRenameJson(RenameResult result)
+    {
+        var payload = new
+        {
+            kind = result.Kind.ToString(),
+            path = result.Path,
+            oldName = result.OldName,
+            requestedName = result.RequestedName,
+            nameAfter = result.NameAfter,
+            numberLabel = result.NumberLabel,
+            numberBefore = result.NumberBefore,
+            numberAfter = result.NumberAfter,
+            oldNameStillPresent = result.OldNameStillPresent,
+            verified = result.Verified,
+            referencesChecked = false,
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatObCycleJson(ObCycleResult result)
     {
         var payload = new
